@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CLIP-Image 素材库管理系统</title>
+  <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://unpkg.com/element-plus"></script>
+  <script src="https://unpkg.com/@element-plus/icons-vue"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f0f2f5; }
+    .app-layout { display: flex; flex-direction: column; height: 100vh; }
+    .top-nav { display: flex; align-items: center; justify-content: space-between; height: 56px; padding: 0 20px; background: #1a1a2e; color: #fff; flex-shrink: 0; }
+    .top-nav .logo { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700; }
+    .top-nav .logo .dot { width: 10px; height: 10px; border-radius: 50%; background: #409EFF; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .top-nav .top-right { display: flex; align-items: center; gap: 14px; }
+    .top-nav .search-input { width: 260px; }
+    .main-layout { display: flex; flex: 1; overflow: hidden; }
+    .sidebar { width: 200px; background: #f5f7fa; border-right: 1px solid #e4e7ed; padding: 16px 0; flex-shrink: 0; display: flex; flex-direction: column; }
+    .sidebar .el-menu { border-right: none; background: transparent; }
+    .sidebar .sidebar-title { padding: 8px 20px; font-size: 12px; color: #909399; letter-spacing: 1px; margin-top: 8px; }
+    .main-content { flex: 1; overflow-y: auto; padding: 24px; }
+
+    .stat-cards { display: flex; gap: 16px; margin-bottom: 20px; }
+    .stat-card { flex: 1; background: #fff; border-radius: 8px; padding: 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+    .stat-card .icon-box { width: 48px; height: 48px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+    .icon-blue { background: #ecf5ff; color: #409EFF; } .icon-green { background: #f0f9eb; color: #67C23A; } .icon-orange { background: #fdf6ec; color: #E6A23C; } .icon-purple { background: #f4f0fe; color: #7C3AED; }
+    .stat-card .info .num { font-size: 24px; font-weight: 700; color: #303133; }
+    .stat-card .info .label { font-size: 13px; color: #909399; margin-top: 2px; }
+
+    .tag-filter { background: #fff; border-radius: 8px; padding: 16px 20px; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+    .tag-filter .title { font-size: 14px; color: #606266; margin-bottom: 10px; font-weight: 500; }
+
+    .asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+    .asset-card { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.06); cursor: pointer; transition: box-shadow 0.2s, transform 0.2s; position: relative; }
+    .asset-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.12); transform: translateY(-2px); }
+    .asset-card .thumb { width: 100%; height: 160px; object-fit: cover; background: #e4e7ed; }
+    .asset-card .card-info { padding: 12px 14px; }
+    .asset-card .card-name { font-size: 14px; font-weight: 500; color: #303133; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .asset-card .card-meta { font-size: 12px; color: #909399; margin-top: 6px; display: flex; justify-content: space-between; }
+    .asset-card .card-tags { margin-top: 8px; display: flex; gap: 4px; flex-wrap: wrap; }
+    .asset-card .ai-badge { position: absolute; top: 8px; right: 8px; background: linear-gradient(135deg,#7C3AED,#409EFF); color: #fff; font-size: 10px; padding: 2px 8px; border-radius: 10px; }
+
+    /* 搜索页 */
+    .search-hero { text-align: center; padding: 32px 0 20px; }
+    .search-hero h2 { font-size: 22px; font-weight: 600; color: #303133; margin-bottom: 6px; }
+    .search-hero .sub { color: #909399; font-size: 13px; margin-bottom: 20px; }
+    .search-result-item { display: flex; gap: 16px; background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); align-items: center; }
+    .search-result-item .result-thumb { width: 100px; height: 75px; object-fit: cover; border-radius: 6px; background: #e4e7ed; flex-shrink: 0; }
+    .search-result-item .result-info { flex: 1; min-width: 0; }
+    .result-name { font-size: 15px; font-weight: 500; color: #303133; }
+    .result-desc { font-size: 13px; color: #909399; margin-top: 4px; }
+    .match-reasons { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+    .score-badge { flex-shrink: 0; text-align: center; }
+    .suggest-tags { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+
+    /* 上传页 */
+    .upload-zone { background: #fff; border-radius: 8px; padding: 48px; text-align: center; border: 2px dashed #dcdfe6; cursor: pointer; transition: all 0.2s; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+    .upload-zone:hover, .upload-zone.dragover { border-color: #7C3AED; background: #faf5ff; }
+    .upload-zone .zone-icon { font-size: 52px; color: #c0c4cc; margin-bottom: 12px; }
+    .upload-zone:hover .zone-icon { color: #7C3AED; }
+    .upload-zone p { font-size: 15px; color: #606266; }
+    .upload-zone .sub { font-size: 12px; color: #c0c4cc; margin-top: 6px; }
+    .upload-preview-list { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+    .upload-preview-item { width: 130px; text-align: center; background: #fff; border-radius: 8px; padding: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+    .upload-preview-item img { width: 114px; height: 85px; object-fit: cover; border-radius: 6px; background: #e4e7ed; }
+    .upload-preview-item .name { font-size: 12px; color: #606266; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .upload-form { background: #fff; border-radius: 8px; padding: 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+
+    /* CLIP 分析面板 */
+    .clip-panel { background: linear-gradient(135deg, #faf5ff 0%, #ecf5ff 100%); border: 1px solid #e0d4f5; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+    .clip-panel .panel-title { font-size: 15px; font-weight: 600; color: #7C3AED; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+    .clip-features { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+    .clip-feature { display: flex; align-items: center; gap: 8px; background: #fff; border-radius: 6px; padding: 10px 14px; }
+    .clip-feature .f-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+    .clip-feature .f-info .f-label { font-size: 12px; color: #909399; }
+    .clip-feature .f-info .f-value { font-size: 14px; font-weight: 500; color: #303133; }
+    .clip-feature .confidence { margin-left: auto; }
+
+    /* 抽屉 */
+    .drawer-image { width: 100%; border-radius: 8px; margin-bottom: 16px; }
+    .meta-row { display: flex; gap: 20px; margin-bottom: 10px; font-size: 13px; }
+    .meta-label { color: #909399; width: 60px; flex-shrink: 0; }
+    .meta-value { color: #303133; }
+    .version-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: #f5f7fa; border-radius: 6px; margin-bottom: 8px; }
+    .version-item .v-tag { font-weight: 600; color: #409EFF; }
+    .audit-table { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); margin-top: 20px; }
+
+    /* 维度说明卡 */
+    .info-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 20px; }
+    .info-card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+    .info-card h4 { font-size: 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+    .info-card p, .info-card ul { font-size: 13px; color: #606266; line-height: 1.8; }
+    .info-card ul { padding-left: 16px; }
+
+    /* AI thinking animation */
+    .ai-thinking { display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: #faf5ff; border-radius: 8px; margin: 12px 0; }
+    .ai-thinking .dots { display: flex; gap: 4px; }
+    .ai-thinking .dots span { width: 6px; height: 6px; border-radius: 50%; background: #7C3AED; animation: bounce 1.2s infinite; }
+    .ai-thinking .dots span:nth-child(2) { animation-delay: .2s; }
+    .ai-thinking .dots span:nth-child(3) { animation-delay: .4s; }
+    @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-8px)} }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div class="app-layout">
+    <!-- ===== 顶部导航 ===== -->
+    <header class="top-nav">
+      <div class="logo"><span class="dot"></span> CLIP-Image 素材库</div>
+      <div class="top-right">
+        <el-input v-model="globalSearch" class="search-input" placeholder="全局搜索素材..." :prefix-icon="Search" clearable size="small" />
+        <el-select v-model="currentRole" size="small" style="width:130px" @change="onRoleChange">
+          <el-option label="管理员" value="admin" />
+          <el-option label="编辑" value="editor" />
+          <el-option label="访客" value="guest" />
+        </el-select>
+        <el-tag :type="roleTagType" size="small" effect="dark">{{ roleLabel }}</el-tag>
+        <span v-if="currentRole!=='guest'" style="font-size:11px;color:#a0aec0">已登录为管理员，拥有全部操作权限</span>
+        <template v-if="currentRole === 'guest'">
+          <el-button type="primary" size="small" plain @click="showLogin = true">登录</el-button>
+        </template>
+        <template v-else>
+          <el-dropdown trigger="click">
+            <span style="color:#fff;cursor:pointer;display:flex;align-items:center;gap:4px">
+              <el-icon><UserFilled /></el-icon> {{ currentUser }} <el-icon><ArrowDown /></el-icon>
+            </span>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item disabled>当前角色：{{ roleLabel }}</el-dropdown-item>
+                <el-dropdown-item divided @click="onLogout">退出登录</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </template>
+      </div>
+    </header>
+
+    <!-- ===== 主体 ===== -->
+    <div class="main-layout">
+      <aside class="sidebar">
+        <el-menu :default-active="currentView" @select="onMenuSelect">
+          <el-menu-item index="assets"><el-icon><PictureFilled /></el-icon><span>素材库</span></el-menu-item>
+          <el-menu-item index="search"><el-icon><Search /></el-icon><span>以文搜图</span></el-menu-item>
+          <el-menu-item index="upload" :disabled="currentRole==='guest'"><el-icon><UploadFilled /></el-icon><span>上传素材</span></el-menu-item>
+        </el-menu>
+        <div style="flex:1"></div>
+        <div class="sidebar-title">AI 能力</div>
+        <el-menu :default-active="currentView" @select="onMenuSelect">
+          <el-menu-item index="clip-info"><el-icon><Cpu /></el-icon><span>CLIP 能力说明</span></el-menu-item>
+        </el-menu>
+        <template v-if="currentRole==='admin'">
+          <div class="sidebar-title">管理</div>
+          <el-menu :default-active="currentView" @select="onMenuSelect">
+            <el-menu-item index="audit"><el-icon><Document /></el-icon><span>审计日志</span></el-menu-item>
+          </el-menu>
+        </template>
+      </aside>
+
+      <main class="main-content">
+
+        <!-- ========== 素材库 ========== -->
+        <template v-if="currentView==='assets'">
+          <div class="stat-cards">
+            <div class="stat-card"><div class="icon-box icon-blue"><el-icon><PictureFilled /></el-icon></div><div class="info"><div class="num">{{ filteredAssets.length }}</div><div class="label">素材总数</div></div></div>
+            <div class="stat-card"><div class="icon-box icon-green"><el-icon><Plus /></el-icon></div><div class="info"><div class="num">{{ monthNewCount }}</div><div class="label">本月新增</div></div></div>
+            <div class="stat-card"><div class="icon-box icon-orange"><el-icon><Collection /></el-icon></div><div class="info"><div class="num">{{ allTags.length }}</div><div class="label">标签数</div></div></div>
+            <div class="stat-card"><div class="icon-box icon-purple"><el-icon><Cpu /></el-icon></div><div class="info"><div class="num">{{ clipReadyCount }}</div><div class="label">CLIP已索引</div></div></div>
+          </div>
+
+          <div class="tag-filter">
+            <div class="title">标签筛选</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <el-tag v-for="t in allTags" :key="t" :type="selectedTags.includes(t)?'':'info'" :effect="selectedTags.includes(t)?'dark':'plain'" style="cursor:pointer" @click="toggleTag(t)">{{ t }}</el-tag>
+            </div>
+          </div>
+
+          <div class="asset-grid">
+            <div v-for="a in filteredAssets" :key="a.id" class="asset-card" @click="openDetail(a)">
+              <img :src="a.thumb" :alt="a.name" class="thumb" loading="lazy">
+              <span class="ai-badge" v-if="a.clipDesc">CLIP 已索引</span>
+              <div class="card-info">
+                <div class="card-name">{{ a.name }}</div>
+                <div class="card-meta"><span>{{ a.author }}</span><span>{{ a.date }}</span></div>
+                <div class="card-tags"><el-tag v-for="t in a.tags" :key="t" size="small">{{ t }}</el-tag></div>
+              </div>
+            </div>
+          </div>
+          <el-empty v-if="filteredAssets.length===0" description="没有匹配的素材" />
+        </template>
+
+        <!-- ========== 以文搜图 ========== -->
+        <template v-if="currentView==='search'">
+          <div class="search-hero">
+            <h2>以文搜图 · Chinese-CLIP 语义检索</h2>
+            <p class="sub">输入自然语言描述，AI 在 512 维语义空间中匹配最相似的图片</p>
+            <el-input v-model="searchQuery" size="large" placeholder="例如：蓝色科技感背景图、年会大合影、白色产品展示图..." style="max-width:600px" clearable @keyup.enter="doSearch">
+              <template #append><el-button type="primary" @click="doSearch" :loading="searching">搜索</el-button></template>
+            </el-input>
+            <div class="suggest-tags">
+              <span style="font-size:12px;color:#c0c4cc">试试语义搜索：</span>
+              <el-tag v-for="s in searchSuggestions" :key="s" type="info" plain size="small" style="cursor:pointer" @click="searchQuery=s;doSearch()">{{ s }}</el-tag>
+            </div>
+          </div>
+
+          <!-- 搜索原理说明 -->
+          <el-collapse v-if="searchResults.length===0 && !searchQuery" style="max-width:700px;margin:0 auto 20px">
+            <el-collapse-item title="CLIP 语义搜索是如何工作的？" name="1">
+              <div style="font-size:13px;color:#606266;line-height:2">
+                <p><b>1. 图像入库时：</b>Chinese-CLIP 的图像编码器将每张图片映射为一个 <b>512 维向量</b>（embedding），存入 FAISS 向量索引。</p>
+                <p><b>2. 搜索时：</b>你输入的中文文本经过 Chinese-CLIP 文本编码器，生成另一个 <b>512 维向量</b>。</p>
+                <p><b>3. 匹配：</b>FAISS 计算文本向量与所有图像向量的<b>余弦相似度</b>，返回 Top-K 结果。</p>
+                <p><b>4. 关键优势：</b>不再依赖文件名或标签的精确匹配，而是理解<b>语义</b>——"蓝色科技背景"能匹配到没有"蓝色"标签、但视觉是蓝色科技风的图片。</p>
+              </div>
+            </el-collapse-item>
+          </el-collapse>
+
+          <template v-if="searchResults.length>0">
+            <div class="tag-filter" style="margin-top:16px">
+              <span style="font-size:13px;color:#606266">检索到 {{ searchResults.length }} 条结果 &nbsp;|&nbsp; 余弦相似度排序 &nbsp;|&nbsp; 继续筛选标签：</span>
+              <el-tag v-for="t in searchResultTags" :key="t" :type="searchActiveTags.includes(t)?'':'info'" :effect="searchActiveTags.includes(t)?'dark':'plain'" style="cursor:pointer;margin-left:6px" size="small" @click="toggleSearchTag(t)">{{ t }}</el-tag>
+            </div>
+
+            <div v-for="(r,i) in searchResultsFiltered" :key="r.id" class="search-result-item">
+              <img :src="r.thumb" class="result-thumb">
+              <div class="result-info">
+                <div class="result-name">{{ i+1 }}. {{ r.name }}</div>
+                <div class="result-desc">{{ r.desc }}</div>
+                <div class="match-reasons">
+                  <el-tag v-for="m in r.matchReasons" :key="m" size="small" type="success" effect="plain">{{ m }}</el-tag>
+                </div>
+              </div>
+              <div class="score-badge">
+                <el-progress type="dashboard" :percentage="r.score" :width="56" :stroke-width="6" :color="r.score>90?'#67C23A':r.score>80?'#409EFF':'#E6A23C'">
+                  <template #default><span style="font-size:13px;font-weight:600">{{ r.score }}%</span></template>
+                </el-progress>
+                <div style="font-size:11px;color:#c0c4cc">余弦相似度</div>
+              </div>
+            </div>
+          </template>
+          <el-empty v-else-if="searchQuery && searchResults.length===0" description="未找到匹配的素材，试试换一种描述方式" />
+        </template>
+
+        <!-- ========== 上传素材（含 CLIP AI 分析） ========== -->
+        <template v-if="currentView==='upload'">
+          <el-alert v-if="currentRole==='guest'" title="访客模式下无法上传素材，请切换到编辑或管理员角色" type="warning" show-icon :closable="false" style="margin-bottom:20px" />
+
+          <!-- 步骤引导 -->
+          <div style="display:flex;gap:16px;margin-bottom:20px">
+            <div style="flex:1;background:#fff;border-radius:8px;padding:16px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.06);display:flex;align-items:center;gap:12px">
+              <span style="width:28px;height:28px;border-radius:50%;background:#7C3AED;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">1</span>
+              <div><b style="font-size:14px;color:#303133">选择图片</b><div style="font-size:12px;color:#909399">点击或拖拽上传，支持批量</div></div>
+            </div>
+            <div style="flex:1;background:#fff;border-radius:8px;padding:16px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.06);display:flex;align-items:center;gap:12px;opacity:0.6">
+              <span style="width:28px;height:28px;border-radius:50%;background:#c0c4cc;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">2</span>
+              <div><b style="font-size:14px;color:#303133">CLIP AI 分析</b><div style="font-size:12px;color:#909399">自动识别物体、风格、色调</div></div>
+            </div>
+            <div style="flex:1;background:#fff;border-radius:8px;padding:16px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.06);display:flex;align-items:center;gap:12px;opacity:0.6">
+              <span style="width:28px;height:28px;border-radius:50%;background:#c0c4cc;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">3</span>
+              <div><b style="font-size:14px;color:#303133">确认入库</b><div style="font-size:12px;color:#909399">补充标签描述，存入FAISS索引</div></div>
+            </div>
+          </div>
+
+          <!-- 上传区域 -->
+          <div :class="['upload-zone',{dragover:dragOver}]" @click="triggerUpload" @dragover.prevent="dragOver=true" @dragleave="dragOver=false" @drop.prevent="onDrop">
+            <div class="zone-icon"><el-icon><UploadFilled /></el-icon></div>
+            <p style="font-size:16px;font-weight:600;color:#303133">点击或拖拽图片到此区域</p>
+            <p class="sub">支持 JPG / PNG / WebP，单文件 ≤20MB · 批量上传 · 上传后自动触发 CLIP AI 分析</p>
+            <input type="file" ref="fileInput" multiple accept="image/jpeg,image/png,image/webp" style="display:none" @change="onFileSelect">
+          </div>
+
+          <!-- 示例提示 -->
+          <div v-if="uploadFiles.length===0" style="text-align:center;padding:12px">
+            <span style="font-size:13px;color:#c0c4cc">还没有选择文件？试试选择一张咖啡、猫咪或风景照片，看看 CLIP 能分析出什么 🧠</span>
+          </div>
+
+          <!-- 文件预览列表 -->
+          <div v-if="uploadFiles.length>0" class="upload-preview-list">
+            <div v-for="(f,i) in uploadFiles" :key="i" class="upload-preview-item">
+              <img :src="f.preview">
+              <div class="name">{{ f.name }}</div>
+              <el-tag :type="f.status==='done'?'success':f.status==='error'?'danger':f.status==='analyzing'?'':'warning'" size="small">
+                {{ f.status==='done'?'完成':f.status==='error'?'失败':f.status==='analyzing'?'CLIP分析中...':'等待' }}
+              </el-tag>
+              <div style="margin-top:4px" v-if="f.status==='uploading'"><el-progress :percentage="f.progress" :stroke-width="4" /></div>
+              <div style="margin-top:4px" v-if="f.status==='analyzing'"><el-progress :percentage="50" :stroke-width="4" :indeterminate="true" /></div>
+            </div>
+          </div>
+
+          <!-- CLIP AI 分析结果面板 -->
+          <div v-if="clipAnalysis" class="clip-panel">
+            <div class="panel-title"><el-icon><Cpu /></el-icon> CLIP AI 分析结果</div>
+            <div class="clip-features">
+              <div class="clip-feature" v-for="f in clipAnalysis.features" :key="f.label">
+                <div class="f-icon" :style="{background:f.bg,color:f.color}"><el-icon><component :is="f.icon"/></el-icon></div>
+                <div class="f-info"><div class="f-label">{{ f.label }}</div><div class="f-value">{{ f.value }}</div></div>
+                <div class="confidence"><el-progress type="circle" :percentage="f.conf" :width="40" :stroke-width="4" :color="f.color" /></div>
+              </div>
+            </div>
+            <div style="margin-top:14px;padding-top:14px;border-top:1px solid #e0d4f5">
+              <span style="font-size:13px;color:#909399">CLIP 建议标签：</span>
+              <el-tag v-for="t in clipAnalysis.suggestedTags" :key="t" style="margin-left:6px;cursor:pointer" size="small" :type="uploadForm.tags.includes(t)?'success':'info'" @click="toggleUploadTag(t)">{{ t }}</el-tag>
+            </div>
+            <div style="margin-top:8px;font-size:13px;color:#606266">
+              <b>CLIP 语义描述：</b>{{ clipAnalysis.semanticDesc }}
+            </div>
+            <div style="margin-top:4px;font-size:12px;color:#c0c4cc">
+              向量维度 512 · 已存入 FAISS 索引 · 可被语义搜索召回
+            </div>
+          </div>
+
+          <!-- 上传表单 -->
+          <div v-if="uploadFiles.length>0" class="upload-form">
+            <h3 style="margin-bottom:16px;font-size:15px">素材元数据（应用到全部）</h3>
+            <el-form label-width="80px" label-position="left">
+              <el-form-item label="描述"><el-input v-model="uploadForm.desc" type="textarea" :rows="2" placeholder="统一补充描述..." /></el-form-item>
+              <el-form-item label="标签">
+                <el-select v-model="uploadForm.tags" multiple placeholder="选择标签（可创建新标签）" style="width:100%" filterable allow-create>
+                  <el-option v-for="t in allTags" :key="t" :label="t" :value="t" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="来源"><el-input v-model="uploadForm.source" placeholder="设计部、外包团队、素材网站..." /></el-form-item>
+              <el-form-item>
+                <el-button type="primary" @click="startUploadWithCLIP" :disabled="uploading" :loading="uploading">
+                  {{ uploading ? 'CLIP 分析中...' : '开始上传 + CLIP AI 分析' }}
+                </el-button>
+                <el-button @click="uploadFiles=[];clipAnalysis=null">清空</el-button>
+              </el-form-item>
+            </el-form>
+          </div>
+        </template>
+
+        <!-- ========== CLIP 能力说明页 ========== -->
+        <template v-if="currentView==='clip-info'">
+          <h2 style="font-size:20px;margin-bottom:8px">Chinese-CLIP 能力说明</h2>
+          <p style="color:#909399;margin-bottom:24px">了解 CLIP 如何理解图片，以及它在素材库中能做什么、不能做什么</p>
+
+          <div class="info-cards">
+            <div class="info-card">
+              <h4><el-icon color="#7C3AED"><Cpu /></el-icon> CLIP 是什么？</h4>
+              <p>CLIP（Contrastive Language-Image Pre-training）是一种<b>图文对比学习模型</b>。Chinese-CLIP 是其汉化版本，使用中文文本-图像对训练。</p>
+              <p style="margin-top:8px">它不是"看图说话"模型，而是将图片和文本映射到<b>同一个 512 维语义空间</b>，通过向量距离衡量图文匹配程度。</p>
+            </div>
+            <div class="info-card">
+              <h4><el-icon color="#409EFF"><Opportunity /></el-icon> CLIP 能做什么（含对象识别）</h4>
+              <ul>
+                <li><b>识别具体物体</b>：猫、狗、咖啡、汉堡、汽车、手机、建筑物...（强项）</li>
+                <li>理解图片的<b>整体风格</b>（科技感、温暖、专业...）</li>
+                <li>识别<b>场景类型</b>（室内/户外、办公室、展厅、草地...）</li>
+                <li>捕捉<b>色彩倾向</b>（蓝色调、暖色调...）</li>
+                <li>理解<b>抽象概念</b>（"适合年会用的"、"看起来很高级"）</li>
+                <li>图文跨模态检索：用文字搜图、用图搜图</li>
+              </ul>
+            </div>
+            <div class="info-card">
+              <h4><el-icon color="#E6A23C"><WarningFilled /></el-icon> CLIP 不擅长什么？</h4>
+              <ul>
+                <li><b>精确文字识别</b>：图片中嵌入的具体文字内容（属于 OCR 领域）</li>
+                <li><b>空间关系</b>："猫在沙发左边还是右边" — 难以区分</li>
+                <li><b>精确计数</b>："图中有 3 只猫还是 5 只" — 容易出错</li>
+                <li><b>细节属性</b>：具体色号、面料材质、产品型号</li>
+                <li><b>小众领域</b>：训练数据未覆盖的冷门专业领域</li>
+              </ul>
+              <p style="margin-top:8px;color:#909399;font-size:12px">注意："有没有猫"CLIP能做（物体识别✓），"有几只猫"CLIP做不好（计数✗）。</p>
+            </div>
+          </div>
+
+          <div class="info-cards" style="margin-top:20px">
+            <div class="info-card">
+              <h4><el-icon color="#67C23A"><Histogram /></el-icon> 描述粒度（真实能力边界）</h4>
+              <p>CLIP 对图片的理解分三个层次，<b>物体识别处于"中粒度"，是强项</b>：</p>
+              <ul style="margin-top:8px">
+                <li><b>粗粒度（★★★）</b>：场景类型（室内/室外/天空）、媒介（照片/插画/设计稿/3D）、色调（暖/冷/暗/亮）</li>
+                <li><b>中粒度（★★★）</b>：<b>主体对象识别（猫/狗/咖啡/汽车/建筑/人物）</b>、风格（科技风/自然风/商务风）、动作（奔跑/坐着/展示）</li>
+                <li><b>细粒度（★☆☆）</b>：具体品牌/型号、精确数量（"3个人"）、空间关系（"左边的猫"）、图片中嵌入的文字内容</li>
+              </ul>
+              <p style="margin-top:8px;color:#7C3AED;font-size:12px"><b>结论：搜"咖啡"能找到咖啡图，搜"猫"能找到猫图 — 这属于CLIP的中粒度强项。</b>搜"拿铁拉花"或"橘猫在窗台上"更精准，因为语义组合+物体=更强的匹配信号。</p>
+            </div>
+            <div class="info-card">
+              <h4><el-icon color="#409EFF"><Connection /></el-icon> 在本系统中如何使用</h4>
+              <ul>
+                <li><b>上传时</b>：CLIP 图像编码器自动提取 512 维向量 → 存入 FAISS</li>
+                <li><b>搜索时</b>：用户输入中文 → CLIP 文本编码器 → 向量检索 → Top-K 结果</li>
+                <li><b>标签辅助</b>：CLIP 分析结果作为标签建议，人工确认后生效</li>
+                <li><b>去重检测</b>：相似向量可检测重复上传的图片</li>
+              </ul>
+            </div>
+            <div class="info-card">
+              <h4><el-icon color="#7C3AED"><Star /></el-icon> 模拟数据中的 CLIP 应用</h4>
+              <p>在本原型中，每张素材都附带了<b>模拟的 CLIP 分析结果</b>：</p>
+              <ul style="margin-top:8px">
+                <li><b>clipDesc</b>：模拟 CLIP 对该图的语义理解</li>
+                <li><b>clipTags</b>：模拟 CLIP 建议的标签</li>
+                <li><b>clipStyle</b>：模拟风格分析（摄影/设计稿/合成图等）</li>
+                <li><b>搜索匹配理由</b>：展示语义匹配的具体维度</li>
+              </ul>
+            </div>
+          </div>
+        </template>
+
+        <!-- ========== 审计日志 ========== -->
+        <template v-if="currentView==='audit'">
+          <h2 style="font-size:18px;margin-bottom:16px">审计日志</h2>
+          <div class="audit-table">
+            <el-table :data="auditLogs" stripe>
+              <el-table-column prop="time" label="时间" width="170" />
+              <el-table-column prop="user" label="用户" width="100" />
+              <el-table-column prop="action" label="操作" width="100">
+                <template #default="{row}"><el-tag :type="actionType(row.action)" size="small">{{ row.action }}</el-tag></template>
+              </el-table-column>
+              <el-table-column prop="target" label="目标素材" />
+              <el-table-column prop="ip" label="IP 地址" width="140" />
+            </el-table>
+          </div>
+        </template>
+
+        <!-- 调试 -->
+        <div style="padding:16px;background:#fff3cd;border-radius:8px" v-if="!['assets','search','upload','clip-info','audit'].includes(currentView)">
+          <b>DEBUG: currentView = "{{ currentView }}" (类型: {{ typeof currentView }})</b> — 不匹配任何视图。
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ===== 素材详情抽屉 ===== -->
+  <el-drawer v-model="detailVisible" :title="detailAsset?.name||''" size="520px">
+    <template v-if="detailAsset">
+      <img :src="detailAsset.thumb" class="drawer-image">
+      <div class="meta-row"><span class="meta-label">上传者</span><span class="meta-value">{{ detailAsset.author }}</span></div>
+      <div class="meta-row"><span class="meta-label">日期</span><span class="meta-value">{{ detailAsset.date }}</span></div>
+      <div class="meta-row"><span class="meta-label">描述</span><span class="meta-value">{{ detailAsset.desc }}</span></div>
+      <div class="meta-row"><span class="meta-label">来源</span><span class="meta-value">{{ detailAsset.source }}</span></div>
+      <div class="meta-row"><span class="meta-label">尺寸</span><span class="meta-value">{{ detailAsset.size }}</span></div>
+      <div class="meta-row"><span class="meta-label">格式</span><span class="meta-value">{{ detailAsset.format }}</span></div>
+      <div class="meta-row">
+        <span class="meta-label">标签</span>
+        <span style="display:flex;gap:6px;flex-wrap:wrap">
+          <el-tag v-for="t in detailAsset.tags" :key="t" closable size="small" @close="removeTag(t)">{{ t }}</el-tag>
+          <el-button size="small" :icon="Plus" circle @click="showAddTag=true" />
+          <el-select v-if="showAddTag" v-model="newTag" size="small" placeholder="添加" style="width:100px" filterable allow-create @change="addTag" @blur="showAddTag=false" ref="tagSelect" />
+        </span>
+      </div>
+
+      <!-- CLIP 语义理解 -->
+      <div v-if="detailAsset.clipDesc" class="clip-panel" style="margin-top:16px">
+        <div class="panel-title"><el-icon><Cpu /></el-icon> CLIP 语义理解</div>
+        <div style="font-size:13px;color:#606266;line-height:1.8">
+          <p><b>语义描述：</b>{{ detailAsset.clipDesc }}</p>
+          <p><b>视觉风格：</b>{{ detailAsset.clipStyle }}</p>
+          <p><b>色彩倾向：</b>{{ detailAsset.clipColor }}</p>
+          <p><b>向量维度：</b>512 维 · FAISS 索引编号 #{{ detailAsset.id }}</p>
+        </div>
+      </div>
+
+      <h3 style="font-size:14px;margin:20px 0 10px;color:#606266">版本历史</h3>
+      <div v-for="(v,i) in detailAsset.versions" :key="i" class="version-item">
+        <div><span class="v-tag">{{ v.version }}</span><span style="margin-left:10px;font-size:13px;color:#606266">{{ v.note }}</span></div>
+        <div style="font-size:12px;color:#c0c4cc">{{ v.date }}</div>
+      </div>
+
+      <div style="margin-top:24px;display:flex;gap:12px">
+        <el-button type="primary" :icon="Download">下载原图</el-button>
+        <el-button :icon="Share" @click="copyShareLink">复制分享链接</el-button>
+        <el-button v-if="currentRole!=='guest'" type="danger" :icon="Delete" plain @click="deleteAsset">删除</el-button>
+      </div>
+    </template>
+  </el-drawer>
+
+  <!-- ===== 登录弹窗 ===== -->
+  <el-dialog v-model="showLogin" title="登录" width="360px" center>
+    <el-form label-width="60px">
+      <el-form-item label="用户名"><el-input v-model="loginForm.username" placeholder="admin / editor / guest" /></el-form-item>
+      <el-form-item label="密码"><el-input v-model="loginForm.password" type="password" placeholder="任意密码" show-password /></el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="showLogin=false">取消</el-button>
+      <el-button type="primary" @click="doLogin">登录</el-button>
+    </template>
+  </el-dialog>
+</div>
+
+<script>
+const { createApp, ref, computed, reactive, nextTick } = Vue
+const { ElMessage, ElMessageBox } = ElementPlus
+
+const app = createApp({
+  setup() {
+    const icons = ElementPlusIconsVue
+
+    // ===== 模拟素材（含 CLIP 分析字段） =====
+    const allTags = ref(['科技感','产品图','海报','UI设计','年会活动','人物','自然风景','城市建筑','动物','食物饮品','交通工具','家居生活'])
+    const mockAssets = [
+      { id:1,  name:'科技感蓝色背景图',    desc:'深蓝色渐变科技感背景，粒子光效',     thumb:'https://picsum.photos/seed/tech1/400/300',  author:'小明', date:'2026-05-03', tags:['科技感'],         source:'设计部',   size:'2.4 MB', format:'PNG',
+        clipDesc:'深蓝色渐变背景，带有发光的粒子效果，呈现科技感和未来感', clipStyle:'数字合成图', clipColor:'深蓝/青色为主色调', clipTags:['科技感','背景','粒子','深蓝'],
+        versions:[{version:'v1.2',note:'优化粒子密度，调整色调',date:'2026-05-03'},{version:'v1.1',note:'增加粒子光效层',date:'2026-04-28'},{version:'v1.0',note:'初版',date:'2026-04-20'}] },
+      { id:2,  name:'2026年会大合影',       desc:'公司2026年度年会全员合影',           thumb:'https://picsum.photos/seed/party2/400/300',  author:'小红', date:'2026-04-28', tags:['年会活动','人物'], source:'行政部',   size:'5.1 MB', format:'JPG',
+        clipDesc:'室内大合照，人群穿着正式服装，舞台灯光，横幅可见', clipStyle:'室内摄影', clipColor:'暖色调/黄色灯光', clipTags:['人群','室内','年会','合影','正式'],
+        versions:[{version:'v1.0',note:'原始照片',date:'2026-04-28'}] },
+      { id:3,  name:'产品白底图系列-A款',   desc:'A款产品白底棚拍图，适合电商使用',     thumb:'https://picsum.photos/seed/prod3/400/300',  author:'小明', date:'2026-04-25', tags:['产品图'],         source:'电商部',   size:'1.8 MB', format:'JPG',
+        clipDesc:'白色背景上的产品展示照片，光线均匀，专业商业摄影风格', clipStyle:'商业摄影棚拍', clipColor:'白色/中性光', clipTags:['产品','白底','商业摄影','电商'],
+        versions:[{version:'v2.0',note:'重新布光拍摄',date:'2026-04-25'},{version:'v1.0',note:'首版棚拍',date:'2026-04-10'}] },
+      { id:4,  name:'双十一促销海报',        desc:'2025双十一大促主视觉海报',           thumb:'https://picsum.photos/seed/poster4/400/300', author:'运营部', date:'2026-03-18', tags:['海报'],          source:'运营部',   size:'3.2 MB', format:'PSD',
+        clipDesc:'促销海报设计，醒目的大字体价格和折扣信息，红金配色', clipStyle:'平面设计/海报', clipColor:'红色/金色', clipTags:['促销','海报','电商','大促','红色'],
+        versions:[{version:'v3.0',note:'最终定稿',date:'2026-03-18'},{version:'v2.0',note:'调整价格区域',date:'2026-03-10'},{version:'v1.0',note:'初稿',date:'2026-03-01'}] },
+      { id:5,  name:'App登录页设计稿',       desc:'移动端App登录注册页面UI设计',        thumb:'https://picsum.photos/seed/ui5/400/300',     author:'设计部', date:'2026-04-12', tags:['UI设计'],        source:'设计部',   size:'0.9 MB', format:'Figma',
+        clipDesc:'移动应用界面截图，包含登录表单、按钮和品牌Logo', clipStyle:'UI设计稿/截图', clipColor:'白色/品牌色', clipTags:['UI','移动端','登录','表单','App'],
+        versions:[{version:'v1.1',note:'调整按钮圆角',date:'2026-04-12'},{version:'v1.0',note:'初稿',date:'2026-04-08'}] },
+      { id:6,  name:'深圳办公室环境照',      desc:'深圳南山办公室全貌及功能区展示',     thumb:'https://picsum.photos/seed/office6/400/300', author:'行政部', date:'2026-04-05', tags:['城市建筑'],      source:'行政部',   size:'3.8 MB', format:'JPG',
+        clipDesc:'现代办公空间，开放式工位和会议室，大窗户自然采光', clipStyle:'室内建筑摄影', clipColor:'白色/木色/自然光', clipTags:['办公室','室内','现代','自然光'],
+        versions:[{version:'v1.0',note:'办公室实拍',date:'2026-04-05'}] },
+      { id:7,  name:'春季新品发布海报',      desc:'2026春季新品系列主视觉海报',         thumb:'https://picsum.photos/seed/poster7/400/300', author:'设计部', date:'2026-03-28', tags:['海报','产品图'],  source:'设计部',   size:'4.1 MB', format:'PSD',
+        clipDesc:'春日主题海报，花卉元素和粉嫩色调，展示春季新品', clipStyle:'平面设计/海报', clipColor:'粉色/绿色/柔光', clipTags:['春季','海报','新品','花卉','粉色'],
+        versions:[{version:'v2.0',note:'终稿',date:'2026-03-28'},{version:'v1.0',note:'初稿',date:'2026-03-20'}] },
+      { id:8,  name:'云南团建风景照',        desc:'公司团建云南大理风光摄影',           thumb:'https://picsum.photos/seed/nature8/400/300', author:'小红', date:'2026-03-15', tags:['自然风景','人物'], source:'行政部',   size:'6.2 MB', format:'JPG',
+        clipDesc:'自然风光照片，蓝天白云下的湖泊和山脉，有游客', clipStyle:'风光摄影', clipColor:'蓝色/绿色/自然光', clipTags:['风景','湖泊','山脉','户外','蓝天'],
+        versions:[{version:'v1.0',note:'团建随拍',date:'2026-03-15'}] },
+      { id:9,  name:'后台管理Dashboard设计', desc:'企业内部管理系统仪表盘页面设计',      thumb:'https://picsum.photos/seed/ui9/400/300',     author:'设计部', date:'2026-03-08', tags:['UI设计','科技感'], source:'设计部',   size:'1.5 MB', format:'PNG',
+        clipDesc:'数据仪表盘界面设计，图表卡片布局，深色主题', clipStyle:'UI设计稿', clipColor:'深色/蓝色图表', clipTags:['仪表盘','后台','数据','深色主题','图表'],
+        versions:[{version:'v1.0',note:'初版',date:'2026-03-08'}] },
+      { id:10, name:'年度报告封面设计',      desc:'2025年度企业报告封面与内页模板',     thumb:'https://picsum.photos/seed/report10/400/300', author:'小明', date:'2026-02-22', tags:['海报','科技感'],   source:'品牌部',   size:'2.0 MB', format:'PDF',
+        clipDesc:'商务报告封面设计，简洁排版，数据可视化元素', clipStyle:'平面设计', clipColor:'深蓝/白色/金色点缀', clipTags:['报告','封面','商务','简洁','品牌'],
+        versions:[{version:'v1.0',note:'定稿',date:'2026-02-22'}] },
+      { id:11, name:'上海外滩建筑摄影',      desc:'上海外滩历史建筑群高清摄影',         thumb:'https://picsum.photos/seed/bund11/400/300', author:'小明', date:'2026-02-10', tags:['城市建筑'],      source:'外部团队', size:'7.5 MB', format:'JPG',
+        clipDesc:'城市建筑群外观，古典欧式建筑，黄浦江畔，黄昏时分', clipStyle:'建筑摄影', clipColor:'暖黄/灰色石墙', clipTags:['建筑','外滩','城市','黄昏','古典'],
+        versions:[{version:'v1.0',note:'外拍素材',date:'2026-02-10'}] },
+      { id:12, name:'员工团队展示页设计',    desc:'企业官网团队介绍页面设计稿',         thumb:'https://picsum.photos/seed/team12/400/300', author:'设计部', date:'2026-01-18', tags:['UI设计','人物'],   source:'设计部',   size:'1.1 MB', format:'PNG',
+        clipDesc:'网页设计稿，人员头像网格布局，简洁专业风格', clipStyle:'UI设计稿', clipColor:'白色/品牌色', clipTags:['网页','团队','头像','简约','企业'],
+        versions:[{version:'v2.0',note:'新增成员照片位',date:'2026-01-25'},{version:'v1.0',note:'初稿',date:'2026-01-18'}] },
+      { id:13, name:'年终庆典主KV设计',      desc:'2025年终庆典活动主视觉及物料',       thumb:'https://picsum.photos/seed/event13/400/300', author:'运营部', date:'2026-01-05', tags:['年会活动','海报'], source:'运营部',   size:'3.6 MB', format:'PSD',
+        clipDesc:'庆典活动主题海报，金色装饰元素和节日氛围', clipStyle:'平面设计/海报', clipColor:'金色/红色/深蓝', clipTags:['年终','庆典','海报','金色','节日'],
+        versions:[{version:'v1.0',note:'最终稿',date:'2026-01-05'}] },
+      { id:14, name:'杭州西湖晨曦风光',      desc:'西湖清晨雾中景色航拍素材',           thumb:'https://picsum.photos/seed/lake14/400/300', author:'小明', date:'2025-12-20', tags:['自然风景'],      source:'外部团队', size:'8.0 MB', format:'JPG',
+        clipDesc:'航拍视角的湖泊景观，清晨薄雾笼罩水面，远山朦胧', clipStyle:'航拍摄影', clipColor:'蓝灰/白雾/晨光', clipTags:['航拍','湖泊','晨雾','自然','远景'],
+        versions:[{version:'v1.0',note:'航拍原始素材',date:'2025-12-20'}] },
+      { id:15, name:'智能家居控制界面',      desc:'智能家居App控制面板UI设计稿',       thumb:'https://picsum.photos/seed/smart15/400/300', author:'设计部', date:'2025-12-08', tags:['UI设计','科技感'], source:'设计部',   size:'1.3 MB', format:'PNG',
+        clipDesc:'移动应用界面，家居设备控制面板，深色主题搭配发光图标', clipStyle:'UI设计稿', clipColor:'深色/霓虹色图标', clipTags:['智能家居','UI','控制面板','深色','App'],
+        versions:[{version:'v1.0',note:'初版',date:'2025-12-08'}] },
+      // ★ 对象级素材 — 展示 CLIP 的具体物体识别能力
+      { id:16, name:'热拿铁咖啡特写',        desc:'一杯热气腾腾的拿铁咖啡，表面有精致拉花', thumb:'https://picsum.photos/seed/coffee16/400/300', author:'小红', date:'2026-05-04', tags:['食物饮品'],  source:'外包团队', size:'3.1 MB', format:'JPG',
+        clipDesc:'一杯热咖啡的特写照片，表面有拉花图案，杯中冒着热气，木质桌面背景', clipStyle:'美食摄影', clipColor:'棕色/奶白色/暖色调', clipTags:['咖啡','拿铁','拉花','热饮','特写','木质桌面'],
+        versions:[{version:'v1.0',note:'商业拍摄',date:'2026-05-04'}] },
+      { id:17, name:'橘猫趴在窗台上',        desc:'一只橘色虎斑猫慵懒地趴在阳光下的窗台上', thumb:'https://picsum.photos/seed/cat17/400/300', author:'小明', date:'2026-05-02', tags:['动物'],      source:'个人拍摄', size:'2.8 MB', format:'JPG',
+        clipDesc:'一只橘色虎斑猫趴在室内窗台上，阳光从窗户照进来，猫咪眯着眼睛', clipStyle:'宠物摄影', clipColor:'橘色/自然光/暖色调', clipTags:['猫','橘猫','宠物','窗台','阳光','慵懒'],
+        versions:[{version:'v1.0',note:'日常拍摄',date:'2026-05-02'}] },
+      { id:18, name:'金毛犬草地奔跑',        desc:'一只金毛寻回犬在绿色草地上欢快地奔跑', thumb:'https://picsum.photos/seed/dog18/400/300', author:'小红', date:'2026-04-30', tags:['动物'],      source:'外部团队', size:'4.5 MB', format:'JPG',
+        clipDesc:'金毛犬在户外草地上奔跑，阳光明媚，狗毛在光线下闪闪发光', clipStyle:'宠物摄影/户外', clipColor:'金色/绿色/蓝天', clipTags:['狗','金毛','草地','户外','奔跑','阳光'],
+        versions:[{version:'v1.0',note:'户外拍摄',date:'2026-04-30'}] },
+      { id:19, name:'手工牛肉汉堡套餐',      desc:'餐厅拍摄的招牌牛肉汉堡配薯条和可乐',   thumb:'https://picsum.photos/seed/burger19/400/300', author:'运营部', date:'2026-04-22', tags:['食物饮品'],  source:'餐饮合作方',size:'3.3 MB', format:'JPG',
+        clipDesc:'汉堡特写照片，芝麻面包夹着牛肉饼、生菜和芝士，旁边有薯条和饮料', clipStyle:'美食摄影', clipColor:'金黄色/绿色/暖色调', clipTags:['汉堡','牛肉','薯条','快餐','美食摄影','套餐'],
+        versions:[{version:'v1.0',note:'商业菜品拍摄',date:'2026-04-22'}] },
+      { id:20, name:'红色跑车展厅展示',      desc:'一辆红色运动跑车在展厅灯光下的多角度展示', thumb:'https://picsum.photos/seed/car20/400/300', author:'设计部', date:'2026-04-18', tags:['交通工具'],  source:'品牌合作方',size:'5.0 MB', format:'JPG',
+        clipDesc:'红色跑车在室内展厅展示，灯光打亮车身曲线，展示运动感线条', clipStyle:'汽车摄影', clipColor:'红色/黑色/展厅灯光', clipTags:['跑车','红色','展厅','轿车','运动','曲线'],
+        versions:[{version:'v1.0',note:'品牌素材授权',date:'2026-04-18'}] },
+      { id:21, name:'北欧风客厅布置',        desc:'简约北欧风格客厅全貌，白色和木色为主',  thumb:'https://picsum.photos/seed/living21/400/300', author:'小明', date:'2026-04-15', tags:['家居生活'],  source:'设计部',   size:'3.6 MB', format:'JPG',
+        clipDesc:'明亮客厅室内设计，白色沙发、木地板、绿植点缀，简约现代风格', clipStyle:'室内设计摄影', clipColor:'白色/木色/绿色点缀', clipTags:['客厅','北欧','简约','室内设计','白色','木地板'],
+        versions:[{version:'v1.0',note:'设计案例采集',date:'2026-04-15'}] },
+    ]
+
+    // ===== 状态 =====
+    const currentView = ref('assets')
+    const currentRole = ref('admin')
+    const currentUser = ref('管理员_张伟')
+    const showLogin = ref(false)
+    const loginForm = ref({username:'',password:''})
+    const globalSearch = ref('')
+    const selectedTags = ref([])
+    const detailVisible = ref(false)
+    const detailAsset = ref(null)
+    const showAddTag = ref(false)
+    const newTag = ref('')
+    const tagSelect = ref(null)
+    const allMockAssets = ref(mockAssets)
+
+    // 搜索
+    const searchQuery = ref('')
+    const searchResults = ref([])
+    const searching = ref(false)
+    const searchActiveTags = ref([])
+    const searchSuggestions = ['咖啡','猫','金毛犬','跑车','蓝色科技背景','汉堡','年会合影','登录页设计','猫咪','狗']
+
+    // 上传
+    const dragOver = ref(false)
+    const uploadFiles = ref([])
+    const fileInput = ref(null)
+    const uploadForm = ref({desc:'',tags:[],source:''})
+    const clipAnalysis = ref(null)
+    const uploading = ref(false)
+
+    // 审计
+    const auditLogs = [
+      {time:'2026-05-07 14:32:10',user:'小明',action:'下载',target:'科技感蓝色背景图',ip:'192.168.1.101'},
+      {time:'2026-05-07 13:15:22',user:'小红',action:'上传',target:'产品白底图系列-A款',ip:'192.168.1.102'},
+      {time:'2026-05-07 11:08:45',user:'运营部',action:'分享',target:'双十一促销海报',ip:'192.168.1.150'},
+      {time:'2026-05-07 09:22:30',user:'设计部',action:'编辑',target:'App登录页设计稿',ip:'192.168.1.120'},
+      {time:'2026-05-06 16:45:11',user:'小明',action:'下载',target:'春季新品发布海报',ip:'192.168.1.101'},
+      {time:'2026-05-06 15:30:05',user:'小红',action:'上传',target:'2026年会大合影',ip:'192.168.1.102'},
+      {time:'2026-05-06 14:12:33',user:'设计部',action:'版本回滚',target:'春季新品发布海报',ip:'192.168.1.120'},
+      {time:'2026-05-06 10:08:17',user:'管理员_张伟',action:'删除',target:'废弃设计稿-旧版',ip:'192.168.1.1'},
+    ]
+
+    // ===== 计算属性 =====
+    const filteredAssets = computed(() => {
+      let arr = allMockAssets.value
+      if (selectedTags.value.length>0) arr = arr.filter(a => selectedTags.value.some(t => a.tags.includes(t)))
+      if (globalSearch.value) {
+        const q = globalSearch.value.toLowerCase()
+        arr = arr.filter(a => a.name.toLowerCase().includes(q) || a.desc.toLowerCase().includes(q) || (a.clipDesc&&a.clipDesc.toLowerCase().includes(q)))
+      }
+      return arr
+    })
+    const monthNewCount = computed(() => {
+      const now = new Date()
+      return allMockAssets.value.filter(a => { const d=new Date(a.date); return d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth() }).length
+    })
+    const clipReadyCount = computed(() => allMockAssets.value.filter(a => a.clipDesc).length)
+    const roleLabel = computed(() => ({admin:'管理员',editor:'编辑',guest:'访客'})[currentRole.value]||'')
+    const roleTagType = computed(() => ({admin:'danger',editor:'warning',guest:'info'})[currentRole.value]||'info')
+    const searchResultTags = computed(() => { const s=new Set(); searchResults.value.forEach(r=>r.tags.forEach(t=>s.add(t))); return [...s] })
+    const searchResultsFiltered = computed(() => {
+      if (searchActiveTags.value.length===0) return searchResults.value
+      return searchResults.value.filter(r=>searchActiveTags.value.some(t=>r.tags.includes(t)))
+    })
+
+    // ===== 方法 =====
+    const onMenuSelect = (i) => { currentView.value = i }
+    const onRoleChange = (v) => { currentUser.value = {admin:'管理员_张伟',editor:'编辑_李红',guest:'访客用户'}[v]||'' }
+    const onLogout = () => { currentRole.value='guest'; currentUser.value='访客用户'; ElMessage.success('已退出登录') }
+    const doLogin = () => {
+      const u = loginForm.value.username.toLowerCase()
+      if (u==='admin') { currentRole.value='admin'; currentUser.value='管理员_张伟' }
+      else if (u==='editor') { currentRole.value='editor'; currentUser.value='编辑_李红' }
+      else { currentRole.value='guest'; currentUser.value='访客用户' }
+      showLogin.value = false; loginForm.value = {username:'',password:''}
+      ElMessage.success('已登录为：'+roleLabel.value)
+    }
+    const toggleTag = (t) => { const i=selectedTags.value.indexOf(t); i>=0?selectedTags.value.splice(i,1):selectedTags.value.push(t) }
+    const toggleSearchTag = (t) => { const i=searchActiveTags.value.indexOf(t); i>=0?searchActiveTags.value.splice(i,1):searchActiveTags.value.push(t) }
+    const toggleUploadTag = (t) => { const i=uploadForm.value.tags.indexOf(t); i>=0?uploadForm.value.tags.splice(i,1):uploadForm.value.tags.push(t) }
+    const openDetail = (a) => { detailAsset.value=a; detailVisible.value=true; showAddTag.value=false }
+    const removeTag = (t) => { const a=allMockAssets.value.find(x=>x.id===detailAsset.value.id); if(a){ a.tags=a.tags.filter(x=>x!==t); detailAsset.value=a } }
+    const addTag = (v) => {
+      if(!v)return; const a=allMockAssets.value.find(x=>x.id===detailAsset.value.id)
+      if(a&&!a.tags.includes(v)){ a.tags.push(v); detailAsset.value=a; if(!allTags.value.includes(v))allTags.value.push(v) }
+      showAddTag.value=false; newTag.value=''
+    }
+    const copyShareLink = () => {
+      navigator.clipboard.writeText('https://clip-image.example.com/share/'+detailAsset.value.id+'/'+Date.now())
+        .then(()=>ElMessage.success('分享链接已复制到剪贴板，有效期24小时'))
+    }
+    const deleteAsset = () => {
+      ElMessageBox.confirm('确定删除该素材吗？此操作不可撤销。','确认删除',{type:'warning'}).then(()=>{
+        const i=allMockAssets.value.findIndex(x=>x.id===detailAsset.value.id)
+        if(i>=0)allMockAssets.value.splice(i,1)
+        detailVisible.value=false; ElMessage.success('素材已删除')
+      }).catch(()=>{})
+    }
+    const actionType = (a) => ({'上传':'success','下载':'','分享':'warning','编辑':'info','删除':'danger','版本回滚':'info'})[a]||''
+
+    // ===== 语义搜索（模拟 CLIP 语义匹配） =====
+    const doSearch = () => {
+      if (!searchQuery.value.trim()) return
+      searching.value = true
+      // 模拟语义检索延迟
+      setTimeout(() => {
+        const q = searchQuery.value
+        // 模拟 CLIP 语义匹配：基于关键词的语义扩展搜索
+        const semanticKeywords = {
+          '蓝色':  ['科技','背景','深蓝','冷色调','渐变'],
+          '科技':  ['蓝色','背景','粒子','仪表','数据','深色','未来'],
+          '年会':  ['合影','人群','活动','庆典','聚会','舞台'],
+          '合影':  ['人群','照片','团队','聚会','年会'],
+          '产品':  ['白色','展示','商业','电商','棚拍'],
+          '白色':  ['产品','展示','棚拍','背景','简约'],
+          '海报':  ['促销','设计','广告','视觉','平面','营销'],
+          '登录':  ['UI','App','移动','表单','界面'],
+          '设计':  ['UI','界面','平面','排版','网页','创意'],
+          '风景':  ['自然','户外','山水','摄影','蓝天','湖泊'],
+          '建筑':  ['城市','大楼','古典','外景','欧式'],
+          '促销':  ['海报','电商','广告','营销','大促'],
+          '春季':  ['花卉','粉色','新品','温暖'],
+          '智能':  ['科技','家居','App','控制','设备'],
+          '界面':  ['UI','设计','面板','App','控制'],
+          '航拍':  ['风景','高空','俯瞰','自然','雾','湖泊'],
+          // ★ 对象级语义扩展
+          '咖啡':  ['拿铁','热饮','拉花','杯子','饮品','棕色','饮料'],
+          '拿铁':  ['咖啡','拉花','热饮','奶泡','杯子'],
+          '猫':    ['猫咪','橘猫','宠物','窗台','虎斑','动物','猫科'],
+          '猫咪':  ['猫','橘猫','宠物','动物','慵懒'],
+          '狗':    ['犬','金毛','宠物','奔跑','草地','户外','动物','犬科'],
+          '金毛':  ['狗','犬','宠物','奔跑','草地','金色','阳光'],
+          '汉堡':  ['薯条','快餐','食物','套餐','餐饮','牛肉','可乐'],
+          '跑车':  ['红色','展厅','轿车','运动','汽车','展示','曲线'],
+          '客厅':  ['北欧','简约','室内','家居','白色','设计','木质'],
+          '宠物':  ['猫','狗','动物','猫科','犬科'],
+          '食物':  ['汉堡','咖啡','薯条','快餐','饮品','餐饮','套餐'],
+          '汽车':  ['跑车','轿车','红色','展厅','运动'],
+          '家居':  ['客厅','北欧','室内','简约','白色','木色','装修'],
+        }
+        // 扩展搜索词
+        let expandedTerms = [q]
+        for (const [kw, terms] of Object.entries(semanticKeywords)) {
+          if (q.includes(kw)) expandedTerms.push(...terms)
+        }
+        // 为每张图片计算模拟语义匹配
+        const results = allMockAssets.value.map(a => {
+          const searchText = (a.name + a.desc + (a.clipDesc||'') + (a.clipTags||[]).join(' ') + (a.clipStyle||'') + (a.clipColor||'')).toLowerCase()
+          const expandedText = expandedTerms.join(' ').toLowerCase()
+          // 计算匹配度
+          let matchScore = 0
+          const matchReasons = []
+          expandedTerms.forEach(t => {
+            if (searchText.includes(t.toLowerCase())) { matchScore += 25; matchReasons.push(t) }
+          })
+          // 直接匹配加分
+          if (a.name.toLowerCase().includes(q.toLowerCase())) matchScore += 20
+          if ((a.clipDesc||'').toLowerCase().includes(q.toLowerCase())) matchScore += 15
+          // 标签匹配
+          a.tags.forEach(t => { if (expandedTerms.some(e => t.includes(e))) matchScore += 10 })
+          // 生成匹配理由
+          const reasonMap = {
+            '蓝色': '色调匹配：蓝色调图片', '科技': '风格匹配：科技感视觉',
+            '背景': '场景匹配：背景类素材', '年会': '场景匹配：活动场合',
+            '合影': '内容匹配：人群合影', '产品': '内容匹配：产品展示',
+            '白色': '色调匹配：白色/浅色背景', '海报': '类型匹配：海报设计',
+            '登录': '功能匹配：登录相关界面', 'UI': '类型匹配：UI设计稿',
+            '风景': '场景匹配：自然风景', '建筑': '场景匹配：建筑摄影',
+            '设计': '类型匹配：设计类素材', '促销': '场景匹配：营销物料',
+            '春季': '季节匹配：春季主题', '智能': '主题匹配：智能设备',
+            '航拍': '视角匹配：航拍素材', 'App': '类型匹配：移动应用',
+            // ★ 对象级匹配理由
+            '咖啡': '物体识别：咖啡', '拿铁': '物体识别：拿铁咖啡',
+            '猫': '物体识别：猫', '猫咪': '物体识别：猫', '橘猫': '物体识别：橘猫',
+            '狗': '物体识别：狗', '金毛': '物体识别：金毛犬', '犬': '物体识别：犬类',
+            '汉堡': '物体识别：汉堡', '薯条': '物体识别：薯条', '食物': '内容匹配：食物',
+            '跑车': '物体识别：跑车', '汽车': '物体识别：汽车',
+            '客厅': '场景匹配：客厅', '家居': '场景匹配：家居',
+            '宠物': '物体识别：宠物', '动物': '物体识别：动物',
+            '户外': '场景匹配：户外', '室内': '场景匹配：室内',
+            '草地': '场景匹配：草地',
+          }
+          const reasons = [...new Set(matchReasons)].slice(0, 3).map(r => reasonMap[r] || ('语义关联：'+r)).filter(Boolean)
+          // 归一化分数
+          const score = Math.min(99, Math.max(45, 55 + matchScore + Math.floor(Math.random()*10)))
+          return { ...a, score, matchReasons: reasons.length>0?reasons:['语义相似度匹配'] }
+        }).filter(r => r.score > 50).sort((a,b) => b.score - a.score).slice(0, 8)
+        searchResults.value = results
+        searchActiveTags.value = []
+        searching.value = false
+      }, 600)
+    }
+
+    // ===== 上传 + CLIP 分析 =====
+    const triggerUpload = () => { if (currentRole.value!=='guest') fileInput.value.click() }
+    const onFileSelect = (e) => { addFiles(Array.from(e.target.files)) }
+    const onDrop = (e) => { dragOver.value=false; addFiles(Array.from(e.dataTransfer.files).filter(f=>f.type.startsWith('image/'))) }
+    const addFiles = (files) => {
+      files.forEach(f => { uploadFiles.value.push({ name:f.name, preview:URL.createObjectURL(f), status:'waiting', progress:0, file:f }) })
+      clipAnalysis.value = null
+    }
+
+    // 模拟 CLIP 分析结果
+    const simulateCLIPAnalysis = () => {
+      const styleOptions = ['商业摄影棚拍','UI设计稿','平面设计/海报','风光摄影','建筑摄影','数字合成图','室内摄影','航拍摄影','插画风格']
+      const colorOptions = ['蓝色/冷色调','暖黄/橙色','白色/中性色','红色/金色','深色/暗色调','绿色/自然色','粉色/柔和色','高饱和度彩色']
+      const tagPool = ['科技','蓝色','背景','UI','App','海报','产品','人物','风景','建筑','设计','摄影','室内','室外','商务','简约','现代','古典','自然','城市','电商','界面','移动端','网页','数据','品牌','创意','团队']
+      const descTemplates = [
+        '该图片呈现{style}特征，{color}为主视觉色调',
+        '{style}图片，整体色调为{color}',
+        '画面具有明显的{style}特点，色彩倾向为{color}',
+      ]
+      const style = styleOptions[Math.floor(Math.random()*styleOptions.length)]
+      const color = colorOptions[Math.floor(Math.random()*colorOptions.length)]
+      const suggestedTags = [...new Set([...tagPool.sort(()=>Math.random()-0.5).slice(0,4), uploadForm.value.tags[0] || '未分类'].filter(Boolean))]
+      const desc = descTemplates[Math.floor(Math.random()*descTemplates.length)].replace('{style}',style).replace('{color}',color)
+      clipAnalysis.value = {
+        features: [
+          { label:'视觉风格', value:style, conf:85+Math.floor(Math.random()*15), icon:'PictureFilled', bg:'#ecf5ff', color:'#409EFF' },
+          { label:'主色调', value:color, conf:80+Math.floor(Math.random()*20), icon:'MagicStick', bg:'#fef0f0', color:'#F56C6C' },
+          { label:'内容密度', value:['简洁','适中','丰富'][Math.floor(Math.random()*3)], conf:70+Math.floor(Math.random()*25), icon:'Grid', bg:'#f0f9eb', color:'#67C23A' },
+          { label:'光线条件', value:['自然光','室内灯光','混合光','平光'][Math.floor(Math.random()*4)], conf:60+Math.floor(Math.random()*30), icon:'Sunny', bg:'#fdf6ec', color:'#E6A23C' },
+        ],
+        suggestedTags,
+        semanticDesc: desc,
+      }
+      // 自动填充建议标签到表单
+      suggestedTags.forEach(t => { if (!uploadForm.value.tags.includes(t) && t) uploadForm.value.tags.push(t) })
+    }
+
+    const startUploadWithCLIP = () => {
+      uploading.value = true
+      // 先进行 CLIP 分析
+      uploadFiles.value.forEach(f => { if(f.status!=='done') f.status='analyzing' })
+      setTimeout(() => {
+        simulateCLIPAnalysis()
+        // 再模拟上传
+        uploadFiles.value.forEach(f => { if(f.status!=='done') f.status='uploading'; f.progress=0 })
+        uploadFiles.value.forEach((f,i) => {
+          if (f.status==='done') return
+          const timer = setInterval(() => {
+            f.progress += Math.floor(Math.random()*20)+10
+            if (f.progress>=100) {
+              f.progress=100; f.status='done'; clearInterval(timer)
+              const newAsset = {
+                id: Date.now()+i,
+                name: f.name.replace(/\.[^.]+$/,''),
+                desc: uploadForm.value.desc || clipAnalysis.value?.semanticDesc || f.name,
+                thumb: f.preview,
+                author: currentUser.value,
+                date: new Date().toISOString().split('T')[0],
+                tags: uploadForm.value.tags.length>0?[...uploadForm.value.tags]:['未分类'],
+                source: uploadForm.value.source||'未知来源',
+                size: (f.file.size/1024/1024).toFixed(1)+' MB',
+                format: f.name.split('.').pop().toUpperCase(),
+                clipDesc: clipAnalysis.value?.semanticDesc||'',
+                clipStyle: clipAnalysis.value?.features[0]?.value||'',
+                clipColor: clipAnalysis.value?.features[1]?.value||'',
+                clipTags: clipAnalysis.value?.suggestedTags||[],
+                versions: [{version:'v1.0',note:'CLIP 自动索引',date:new Date().toISOString().split('T')[0]}],
+              }
+              allMockAssets.value.unshift(newAsset)
+              ElMessage.success(f.name+' 上传完成，CLIP 向量已索引')
+            }
+          }, 200+Math.random()*400)
+        })
+        uploading.value = false
+      }, 1500)
+    }
+
+    return {
+      currentView,currentRole,currentUser,showLogin,loginForm,
+      globalSearch,selectedTags,allTags,
+      detailVisible,detailAsset,showAddTag,newTag,tagSelect,
+      searchQuery,searchResults,searching,searchActiveTags,searchSuggestions,
+      dragOver,uploadFiles,fileInput,uploadForm,clipAnalysis,uploading,
+      auditLogs,
+      filteredAssets,monthNewCount,clipReadyCount,roleLabel,roleTagType,
+      searchResultTags,searchResultsFiltered,
+      onMenuSelect,onRoleChange,onLogout,doLogin,
+      toggleTag,toggleSearchTag,toggleUploadTag,openDetail,removeTag,addTag,
+      copyShareLink,deleteAsset,actionType,
+      doSearch,triggerUpload,onFileSelect,onDrop,startUploadWithCLIP,
+    }
+  }
+})
+
+app.use(ElementPlus)
+for (const [key, component] of Object.entries(ElementPlusIconsVue)) { app.component(key, component) }
+app.mount('#app')
+</script>
+</body>
+</html>

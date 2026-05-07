@@ -1,0 +1,42 @@
+# OS / Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+env/
+.env
+.env.*
+
+# Node / Frontend
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Runtime data (local)
+data/sqlite/*.db
+data/logs/*
+!data/logs/.gitkeep
+data/uploads/*
+!data/uploads/.gitkeep
+data/faiss/*
+!data/faiss/.gitkeep
+model/cache/*
+!model/cache/.gitkeep
+model/chinese-clip/checkpoints/
+
+# Build / Temp
+*.log
+tmp/
+temp/
+
