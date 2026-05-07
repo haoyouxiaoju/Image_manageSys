@@ -30,7 +30,7 @@ function viewCollection(c: { id: number; name: string; assetIds: number[] }) {
   </div>
 
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
-    <div v-for="c in store.mockCollections" :key="c.id" class="collection-card" @click="viewCollection(c)">
+    <div v-for="c in store.collections" :key="c.id" class="collection-card" @click="viewCollection(c)">
       <div class="col-header">
         <span class="col-name">{{ c.name }}</span>
         <el-tag size="small">{{ c.assetIds.length }} 项</el-tag>
@@ -46,7 +46,7 @@ function viewCollection(c: { id: number; name: string; assetIds: number[] }) {
       <div class="col-meta">创建于 {{ c.created }} · {{ c.creator }}</div>
     </div>
   </div>
-  <el-empty v-if="store.mockCollections.length === 0" description="暂无分组" />
+  <el-empty v-if="store.collections.length === 0" description="暂无分组" />
 
   <el-dialog v-model="showDialog" title="新建分组" width="440px">
     <el-form label-width="70px">
