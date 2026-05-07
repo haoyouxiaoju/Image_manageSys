@@ -54,6 +54,7 @@ function goLogin() {
       <template v-if="auth.isGuest">
         <el-tag type="info" size="small">未登录</el-tag>
         <el-button type="primary" size="small" @click="goLogin">登录</el-button>
+        <el-button size="small" @click="router.push('/login?mode=register')">注册</el-button>
       </template>
       <template v-else>
         <el-tag :type="auth.isAdmin ? 'danger' : 'warning'" size="small" effect="dark">

@@ -82,6 +82,22 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem('user', JSON.stringify(user.value))
   }
 
+  /** 注册（注册成功后自动登录） */
+  async function register(credentials: LoginCredentials) {
+    const response = await authApi.register(credentials)
+    const { access_token } = response.data
+    token.value = access_token
+    localStorage.setItem('access_token', access_token)
+    const meResponse = await authApi.getMe()
+    user.value = meResponse.data
+    localStorage.setItem('user', JSON.stringify(meResponse.data))
+    const apiRole = (meResponse.data as any).role
+    if (apiRole && ['admin', 'editor', 'guest'].includes(apiRole)) {
+      role.value = apiRole as Role
+      localStorage.setItem('role', apiRole)
+    }
+  }
+
   function logout() {
     token.value = null
     user.value = null
@@ -94,6 +110,6 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     user, token, role,
     isLoggedIn, isAdmin, isEditor, isGuest, roleLabel,
-    login, logout,
+    login, register, logout,
   }
 })
