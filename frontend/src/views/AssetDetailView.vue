@@ -89,6 +89,49 @@ function deleteAsset() {
     router.push('/assets')
   }).catch(() => {})
 }
+
+// #1: 版本上传
+const showVersionDialog = ref(false)
+const versionForm = reactive({ file: null as File | null, tag: '', note: '' })
+const versionFileInput = ref<HTMLInputElement | null>(null)
+
+function openVersionDialog() {
+  if (!asset.value) return
+  // 自动建议下一版本号
+  const latest = asset.value.versions[0]
+  if (latest) {
+    const parts = latest.version.replace('v', '').split('.')
+    const minor = parseInt(parts[1] || '0') + 1
+    versionForm.tag = `v${parts[0]}.${minor}`
+  } else {
+    versionForm.tag = 'v1.0'
+  }
+  versionForm.note = ''
+  versionForm.file = null
+  showVersionDialog.value = true
+}
+
+function onVersionFileSelected(e: Event) {
+  const files = (e.target as HTMLInputElement).files
+  if (files && files.length > 0) versionForm.file = files[0]
+}
+
+function submitVersion() {
+  if (!asset.value || !versionForm.file) {
+    ElMessage.warning('请选择要上传的文件')
+    return
+  }
+  const today = new Date().toISOString().split('T')[0]
+  store.addVersion(asset.value.id, {
+    version: versionForm.tag || `v${Date.now() % 100}`,
+    note: versionForm.note || '新增版本',
+    date: today,
+  })
+  // 更新 asset 引用
+  asset.value = store.getAssetById(asset.value.id)
+  ElMessage.success(`版本 ${versionForm.tag} 已上传`)
+  showVersionDialog.value = false
+}
 </script>
 
 <template>
@@ -151,7 +194,10 @@ function deleteAsset() {
       </div>
     </div>
 
-    <h3 style="font-size:14px;margin:20px 0 10px;color:#606266">版本历史</h3>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 10px">
+      <h3 style="font-size:14px;color:#606266;margin:0">版本历史</h3>
+      <el-button v-if="!auth.isGuest" size="small" :icon="Upload" @click="openVersionDialog">上传新版本</el-button>
+    </div>
     <div v-for="(v, i) in asset.versions" :key="i" class="version-item">
       <div><span class="v-tag">{{ v.version }}</span><span style="margin-left:10px;font-size:13px;color:#606266">{{ v.note }}</span></div>
       <div style="font-size:12px;color:#c0c4cc">{{ v.date }}</div>
@@ -163,5 +209,28 @@ function deleteAsset() {
       <el-button v-if="canDelete" type="danger" :icon="Delete" plain @click="deleteAsset">删除</el-button>
     </div>
   </div>
-  <el-empty v-else description="素材未找到" />
+
+  <!-- #1: 版本上传对话框 -->
+  <el-dialog v-model="showVersionDialog" title="上传新版本" width="440px">
+    <el-form label-width="70px">
+      <el-form-item label="选择文件">
+        <input type="file" ref="versionFileInput" accept="image/jpeg,image/png,image/webp" @change="onVersionFileSelected" style="display:block">
+        <span v-if="versionForm.file" style="font-size:12px;color:#67C23A;margin-top:4px;display:block">
+          已选择：{{ versionForm.file.name }}
+        </span>
+      </el-form-item>
+      <el-form-item label="版本号">
+        <el-input v-model="versionForm.tag" placeholder="例如 v1.1" />
+      </el-form-item>
+      <el-form-item label="变更说明">
+        <el-input v-model="versionForm.note" type="textarea" :rows="2" placeholder="说明此版本的变更内容" />
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="showVersionDialog = false">取消</el-button>
+      <el-button type="primary" @click="submitVersion">上传</el-button>
+    </template>
+  </el-dialog>
+
+  <el-empty v-if="!asset" description="素材未找到" />
 </template>

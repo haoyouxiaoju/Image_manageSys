@@ -34,15 +34,56 @@ function revokeLink(link: ShareLink) {
   }).catch(() => {})
 }
 
-function createShareLink() {
-  ElMessage.info('模拟创建：POST /api/v1/share-links { asset_id, expires_in_hours }')
+// #3: 新建分享链接对话框
+const showCreateDialog = ref(false)
+const createForm = ref({ assetId: 0, expiresIn: 24 })
+const assetSearchQuery = ref('')
+
+const filteredAssetsForShare = ref<{ id:number; name:string }[]>([])
+function onSearchAssets(q: string) {
+  assetSearchQuery.value = q
+  if (!q) { filteredAssetsForShare.value = []; return }
+  const kw = q.toLowerCase()
+  filteredAssetsForShare.value = store.allAssets
+    .filter(a => a.name.toLowerCase().includes(kw))
+    .slice(0, 10)
+    .map(a => ({ id: a.id, name: a.name }))
+}
+
+function openCreateDialog() {
+  createForm.value = { assetId: 0, expiresIn: 24 }
+  filteredAssetsForShare.value = store.allAssets.slice(0, 10).map(a => ({ id: a.id, name: a.name }))
+  showCreateDialog.value = true
+}
+
+function confirmCreateLink() {
+  if (!createForm.value.assetId) { ElMessage.warning('请选择素材'); return }
+  const asset = store.getAssetById(createForm.value.assetId)
+  if (!asset) return
+  const token = Math.random().toString(36).substring(2, 14)
+  const now = new Date()
+  const expires = new Date(now.getTime() + createForm.value.expiresIn * 3600000)
+  const fmt = (d: Date) => d.toISOString().replace('T', ' ').substring(0, 16)
+
+  shareLinks.value.unshift({
+    id: Date.now(),
+    assetId: asset.id,
+    assetName: asset.name,
+    token,
+    url: `https://clip-image.example.com/share/${token}`,
+    created: fmt(now),
+    expiresAt: fmt(expires),
+    isActive: true,
+  })
+  ElMessage.success('分享链接已创建')
+  showCreateDialog.value = false
 }
 </script>
 
 <template>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
     <h2 style="font-size:20px">分享管理</h2>
-    <el-button type="primary" :icon="Plus" @click="createShareLink">新建分享链接</el-button>
+    <el-button type="primary" :icon="Plus" @click="openCreateDialog">新建分享链接</el-button>
   </div>
 
   <div class="audit-table">
@@ -71,5 +112,36 @@ function createShareLink() {
       </el-table-column>
     </el-table>
   </div>
+  <!-- #3: 新建分享链接对话框 -->
+  <el-dialog v-model="showCreateDialog" title="新建分享链接" width="460px">
+    <el-form label-width="80px">
+      <el-form-item label="选择素材">
+        <el-select
+          v-model="createForm.assetId"
+          filterable
+          remote
+          :remote-method="onSearchAssets"
+          placeholder="搜索素材名称..."
+          style="width:100%"
+        >
+          <el-option v-for="a in filteredAssetsForShare" :key="a.id" :label="a.name" :value="a.id" />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="过期时间">
+        <el-select v-model="createForm.expiresIn" style="width:100%">
+          <el-option label="1 小时" :value="1" />
+          <el-option label="6 小时" :value="6" />
+          <el-option label="24 小时" :value="24" />
+          <el-option label="72 小时" :value="72" />
+          <el-option label="7 天" :value="168" />
+        </el-select>
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="showCreateDialog = false">取消</el-button>
+      <el-button type="primary" @click="confirmCreateLink">创建链接</el-button>
+    </template>
+  </el-dialog>
+
   <el-empty v-if="shareLinks.length === 0" description="暂无分享链接" />
 </template>
