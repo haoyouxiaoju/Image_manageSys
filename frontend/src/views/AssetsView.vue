@@ -1,11 +1,17 @@
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAssetStore } from '@/stores/assets'
 import AssetCard from '@/components/common/AssetCard.vue'
 import StatCard from '@/components/common/StatCard.vue'
+import LoadingSkeleton from '@/components/common/LoadingSkeleton.vue'
 
 const router = useRouter()
 const store = useAssetStore()
+
+onMounted(() => {
+  store.fetchAssets()
+})
 
 function goDetail(id: number) {
   router.push(`/asset/${id}`)
@@ -13,8 +19,18 @@ function goDetail(id: number) {
 </script>
 
 <template>
+  <!-- 错误提示 -->
+  <el-alert v-if="store.error" :title="store.error" type="error" show-icon :closable="false" style="margin-bottom:16px">
+    <template #default>
+      <el-button size="small" @click="store.fetchAssets()">重试</el-button>
+    </template>
+  </el-alert>
+
+  <!-- 加载骨架 -->
+  <LoadingSkeleton v-if="store.loading" type="cards" :count="6" />
+
   <!-- 统计卡片 -->
-  <div class="stat-cards">
+  <div class="stat-cards" v-if="!store.loading">
     <StatCard icon="PictureFilled" color="blue"  :num="store.allAssets.length" label="素材总数" />
     <StatCard icon="Plus"          color="green"  :num="store.monthNewCount"    label="本月新增" />
     <StatCard icon="Collection"    color="orange" :num="store.allTags.length"   label="标签数" />

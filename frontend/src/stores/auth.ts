@@ -3,8 +3,8 @@ import { ref, computed } from 'vue'
 import { authApi } from '@/api/auth'
 import type { User, Role, LoginCredentials } from '@/types'
 
-// ★ 后端未就绪时开启 mock 模式
-const USE_MOCK_AUTH = true
+// ★ 后端就绪后关闭 mock，走真实 API
+const USE_MOCK_AUTH = false
 
 export const useAuthStore = defineStore('auth', () => {
   // ===== 状态 =====
@@ -42,11 +42,12 @@ export const useAuthStore = defineStore('auth', () => {
     const meResponse = await authApi.getMe()
     user.value = meResponse.data
     localStorage.setItem('user', JSON.stringify(meResponse.data))
-    const username = meResponse.data.username.toLowerCase()
-    if (username === 'admin') role.value = 'admin'
-    else if (username === 'editor') role.value = 'editor'
-    else role.value = 'guest'
-    localStorage.setItem('role', role.value)
+    // 从 API 返回的 role 字段读取角色（不再根据用户名推断）
+    const apiRole = (meResponse.data as any).role
+    if (apiRole && ['admin', 'editor', 'guest'].includes(apiRole)) {
+      role.value = apiRole as Role
+      localStorage.setItem('role', apiRole)
+    }
   }
 
   function mockLogin(username: string) {

@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useAssetStore } from '@/stores/assets'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import LoadingSkeleton from '@/components/common/LoadingSkeleton.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -11,6 +12,7 @@ const auth = useAuthStore()
 const store = useAssetStore()
 
 const asset = ref(store.getAssetById(Number(route.params.id)))
+const detailLoading = ref(false)
 const showAddTag = ref(false)
 const newTag = ref('')
 
@@ -18,8 +20,11 @@ const newTag = ref('')
 const isEditing = ref(false)
 const editForm = reactive({ name: '', desc: '', source: '' })
 
-onMounted(() => {
-  asset.value = store.getAssetById(Number(route.params.id))
+onMounted(async () => {
+  detailLoading.value = true
+  asset.value = await store.fetchAssetById(Number(route.params.id))
+  detailLoading.value = false
+  checkDeletePermission()
 })
 
 function enterEdit() {
@@ -30,9 +35,9 @@ function enterEdit() {
   isEditing.value = true
 }
 
-function saveEdit() {
+async function saveEdit() {
   if (!asset.value) return
-  store.updateAsset(asset.value.id, {
+  await store.updateAsset(asset.value.id, {
     name: editForm.name,
     desc: editForm.desc,
     source: editForm.source,
@@ -81,13 +86,14 @@ function checkDeletePermission() {
 }
 onMounted(() => { checkDeletePermission() })
 
-function deleteAsset() {
+async function deleteAsset() {
   if (!asset.value) return
-  ElMessageBox.confirm('确定删除该素材吗？此操作不可撤销。', '确认删除', { type: 'warning' }).then(() => {
-    store.deleteAsset(asset.value!.id)
+  try {
+    await ElMessageBox.confirm('确定删除该素材吗？此操作不可撤销。', '确认删除', { type: 'warning' })
+    await store.deleteAsset(asset.value!.id)
     ElMessage.success('素材已删除')
     router.push('/assets')
-  }).catch(() => {})
+  } catch { /* 取消删除 */ }
 }
 
 // #1: 版本上传
@@ -135,7 +141,8 @@ function submitVersion() {
 </script>
 
 <template>
-  <div v-if="asset" style="max-width:720px">
+  <LoadingSkeleton v-if="detailLoading" type="detail" />
+  <div v-else-if="asset" style="max-width:720px">
     <el-button :icon="ArrowLeft" @click="router.back()" style="margin-bottom:16px">返回</el-button>
 
     <img :src="asset.thumb" class="drawer-image">
@@ -232,5 +239,5 @@ function submitVersion() {
     </template>
   </el-dialog>
 
-  <el-empty v-if="!asset" description="素材未找到" />
+  <el-empty v-if="!detailLoading && !asset" description="素材未找到" />
 </template>

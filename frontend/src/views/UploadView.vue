@@ -78,47 +78,36 @@ function simulateCLIPAnalysis() {
   suggestedTags.forEach(t => { if (!uploadForm.value.tags.includes(t)) uploadForm.value.tags.push(t) })
 }
 
-function startUpload() {
+// ★ 真实上传（FormData + 进度回调）
+async function startUpload() {
   uploading.value = true
-  uploadFiles.value.forEach(f => { if (f.status !== 'done') f.status = 'analyzing' })
+  // CLIP 分析保留模拟（后端 CLIP 编码未就绪）
+  simulateCLIPAnalysis()
 
-  setTimeout(() => {
-    simulateCLIPAnalysis()
-    uploadFiles.value.forEach(f => { if (f.status !== 'done') { f.status = 'uploading'; f.progress = 0 } })
+  for (const f of uploadFiles.value) {
+    if (f.status === 'done') continue
+    f.status = 'uploading'
+    f.progress = 0
 
-    uploadFiles.value.forEach(f => {
-      if (f.status === 'done') return
-      const timer = setInterval(() => {
-        f.progress += 15
-        if (f.progress >= 100) {
-          f.progress = 100; f.status = 'done'; clearInterval(timer)
+    try {
+      const formData = new FormData()
+      formData.append('file', f.file)
+      formData.append('name', f.name.replace(/\.[^.]+$/, ''))
+      formData.append('description', uploadForm.value.desc || '')
+      formData.append('source', uploadForm.value.source || '')
 
-          // ★ 写入共享 Store
-          const today = new Date().toISOString().split('T')[0]
-          const version: AssetVersion = { version: 'v1.0', note: 'CLIP 自动索引', date: today }
-          store.addAsset({
-            id: Date.now() + Math.floor(Math.random() * 1000),
-            name: f.name.replace(/\.[^.]+$/, ''),
-            desc: uploadForm.value.desc || clipAnalysis.value?.semanticDesc || f.name,
-            thumb: f.preview,
-            author: auth.user?.username || '当前用户',
-            date: today,
-            tags: uploadForm.value.tags.length > 0 ? [...uploadForm.value.tags] : ['未分类'],
-            source: uploadForm.value.source || '未知来源',
-            size: (f.file.size / 1024 / 1024).toFixed(1) + ' MB',
-            format: f.name.split('.').pop()?.toUpperCase() || 'UNKNOWN',
-            clipDesc: clipAnalysis.value?.semanticDesc || '',
-            clipStyle: clipAnalysis.value?.features[0]?.value || '',
-            clipColor: clipAnalysis.value?.features[1]?.value || '',
-            clipTags: clipAnalysis.value?.suggestedTags || [],
-            versions: [version],
-          })
-          ElMessage.success(`${f.name} 上传完成，CLIP 向量已索引`)
-        }
-      }, 250)
-    })
-    uploading.value = false
-  }, 1500)
+      await store.uploadAsset(formData, (e: ProgressEvent) => {
+        if (e.total) f.progress = Math.round((e.loaded / e.total) * 100)
+      })
+      f.progress = 100
+      f.status = 'done'
+      ElMessage.success(`${f.name} 上传完成`)
+    } catch (e: any) {
+      f.status = 'error'
+      ElMessage.error(`${f.name} 上传失败：${e?.response?.data?.error?.message || e?.message || '未知错误'}`)
+    }
+  }
+  uploading.value = false
 }
 </script>
 
