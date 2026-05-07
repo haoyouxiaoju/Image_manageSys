@@ -7,7 +7,13 @@ const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 
-const currentView = computed(() => route.path.replace('/', '') || 'assets')
+// 匹配当前路由到侧边栏菜单项
+const currentView = computed(() => {
+  const path = route.path
+  if (path.startsWith('/collection/')) return 'collections'
+  if (path.startsWith('/asset/')) return 'assets'
+  return path.replace('/', '') || 'assets'
+})
 
 function onMenuSelect(index: string) {
   router.push(`/${index}`)
@@ -33,6 +39,10 @@ function onMenuSelect(index: string) {
       <el-menu-item index="upload" :disabled="auth.isGuest">
         <el-icon><UploadFilled /></el-icon>
         <span>上传素材</span>
+      </el-menu-item>
+      <el-menu-item index="share-manage" :disabled="auth.isGuest">
+        <el-icon><Share /></el-icon>
+        <span>分享管理</span>
       </el-menu-item>
     </el-menu>
 

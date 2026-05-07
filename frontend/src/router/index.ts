@@ -27,6 +27,12 @@ const router = createRouter({
       meta: { title: '分组管理' },
     },
     {
+      path: '/collection/:id',
+      name: 'CollectionDetail',
+      component: () => import('@/views/CollectionDetailView.vue'),
+      meta: { title: '分组详情' },
+    },
+    {
       path: '/search',
       name: 'Search',
       component: () => import('@/views/SearchView.vue'),
@@ -43,6 +49,12 @@ const router = createRouter({
       name: 'ClipInfo',
       component: () => import('@/views/ClipInfoView.vue'),
       meta: { title: 'CLIP 能力说明' },
+    },
+    {
+      path: '/share-manage',
+      name: 'ShareManage',
+      component: () => import('@/views/ShareManageView.vue'),
+      meta: { title: '分享管理', requiresAuth: true, minRole: 'editor' },
     },
     {
       path: '/audit',

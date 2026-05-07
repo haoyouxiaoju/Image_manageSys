@@ -10,8 +10,13 @@ const localQuery = ref('')
 const searchActiveTags = ref<string[]>([])
 const searchSuggestions = ['咖啡','猫','金毛犬','跑车','蓝色科技背景','汉堡','年会合影','登录页设计']
 
+// Q3.2: 搜索分页
+const searchPage = ref(1)
+const searchPageSize = 10
+
 function doSearch() {
   if (!localQuery.value.trim()) return
+  searchPage.value = 1
   store.doSearch(localQuery.value)
 }
 
@@ -22,13 +27,21 @@ const searchResultTags = computed(() => {
 })
 
 const searchResultsFiltered = computed(() => {
-  if (searchActiveTags.value.length === 0) return store.searchResults
-  return store.searchResults.filter(r => searchActiveTags.value.some(t => r.tags.includes(t)))
+  let arr = searchActiveTags.value.length === 0
+    ? store.searchResults
+    : store.searchResults.filter(r => searchActiveTags.value.some(t => r.tags.includes(t)))
+  return arr
+})
+
+const pagedSearchResults = computed(() => {
+  const start = (searchPage.value - 1) * searchPageSize
+  return searchResultsFiltered.value.slice(start, start + searchPageSize)
 })
 
 function toggleSearchTag(t: string) {
   const i = searchActiveTags.value.indexOf(t)
   i >= 0 ? searchActiveTags.value.splice(i, 1) : searchActiveTags.value.push(t)
+  searchPage.value = 1
 }
 
 function goDetail(id: number) {
@@ -80,7 +93,7 @@ function goDetail(id: number) {
       >{{ t }}</el-tag>
     </div>
 
-    <div v-for="(r, i) in searchResultsFiltered" :key="r.id" class="search-result-item" style="cursor:pointer" @click="goDetail(r.id)">
+    <div v-for="(r, i) in pagedSearchResults" :key="r.id" class="search-result-item" style="cursor:pointer" @click="goDetail(r.id)">
       <img :src="r.thumb" class="result-thumb">
       <div class="result-info">
         <div class="result-name">{{ i + 1 }}. {{ r.name }}</div>
@@ -98,5 +111,16 @@ function goDetail(id: number) {
       </div>
     </div>
   </template>
+  <!-- 搜索分页 -->
+  <div class="pagination-wrap" v-if="searchResultsFiltered.length > searchPageSize">
+    <el-pagination
+      background
+      layout="prev, pager, next, total"
+      :total="searchResultsFiltered.length"
+      :page-size="searchPageSize"
+      v-model:current-page="searchPage"
+    />
+  </div>
+
   <el-empty v-else-if="store.searchQuery && store.searchResults.length===0 && !store.searching" description="未找到匹配的素材，试试换一种描述" />
 </template>
