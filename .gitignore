@@ -40,3 +40,6 @@ model/chinese-clip/checkpoints/
 tmp/
 temp/
 
+#plan docs
+./docs/plans/*
+
