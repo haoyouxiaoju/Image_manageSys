@@ -1,26 +1,38 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useAssetStore } from '@/stores/assets'
 import { ElMessage } from 'element-plus'
-import type { UploadFormData, AssetVersion } from '@/types'
 
-const router = useRouter()
 const auth = useAuthStore()
 const store = useAssetStore()
 
+// ---- 步骤控制 ----
+type Step = 'select' | 'analyze' | 'upload'
+const currentStep = ref<Step>('select')
+
+// ---- 文件 ----
 const dragOver = ref(false)
-const uploading = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
-const uploadFiles = ref<{ name:string; preview:string; status:string; progress:number; file:File }[]>([])
-const uploadForm = ref<UploadFormData>({ desc: '', tags: [], source: '' })
-const clipAnalysis = ref<{
-  features: { label:string; value:string; conf:number; icon:string; bg:string; color:string }[]
-  suggestedTags: string[]
-  semanticDesc: string
+const uploadFiles = ref<{ name: string; preview: string; file: File }[]>([])
+
+// ---- 表单（CLIP 分析后自动填充） ----
+const formDesc = ref('')
+const formTags = ref<string[]>([])
+const formSource = ref('')
+
+// ---- CLIP 分析 ----
+const analyzing = ref(false)
+const clipResult = ref<{
+  style: string; color: string; density: string; light: string
+  desc: string; tags: string[]
 } | null>(null)
 
+// ---- 上传 ----
+const uploading = ref(false)
+const uploadProgress = ref<Record<string, number>>({})
+
+// ===== 文件操作 =====
 function triggerUpload() {
   if (!auth.isGuest) fileInput.value?.click()
 }
@@ -35,158 +47,248 @@ function onDrop(e: DragEvent) {
 }
 function addFiles(files: File[]) {
   files.forEach(f => {
-    uploadFiles.value.push({
-      name: f.name, preview: URL.createObjectURL(f),
-      status: 'waiting', progress: 0, file: f,
-    })
+    if (!uploadFiles.value.find(x => x.name === f.name)) {
+      uploadFiles.value.push({ name: f.name, preview: URL.createObjectURL(f), file: f })
+    }
   })
-  clipAnalysis.value = null
-}
-function toggleUploadTag(t: string) {
-  const i = uploadForm.value.tags.indexOf(t)
-  i >= 0 ? uploadForm.value.tags.splice(i, 1) : uploadForm.value.tags.push(t)
+  currentStep.value = 'select'
+  clipResult.value = null
 }
 
+function removeFile(idx: number) {
+  uploadFiles.value.splice(idx, 1)
+}
+
+const hasFiles = computed(() => uploadFiles.value.length > 0)
+
+// ===== 步骤 2：模拟 CLIP 分析 =====
 function hashStr(s: string): number {
   let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h) + s.charCodeAt(i)
   return Math.abs(h)
 }
 
-function simulateCLIPAnalysis() {
-  const styleOptions = ['商业摄影棚拍','UI设计稿','平面设计/海报','风光摄影','建筑摄影','数字合成图','室内摄影','航拍摄影','插画风格']
-  const colorOptions = ['蓝色/冷色调','暖黄/橙色','白色/中性色','红色/金色','深色/暗色调','绿色/自然色','粉色/柔和色','高饱和度彩色']
-  const tagPool = ['科技','蓝色','背景','UI','App','海报','产品','人物','风景','建筑','设计','摄影','室内','室外','商务','简约','现代']
-  const descTemplates = ['该图片呈现{style}特征，{color}为主视觉色调','{style}图片，整体色调为{color}']
+function runCLIPAnalysis() {
+  if (!hasFiles.value) return
+  analyzing.value = true
+  currentStep.value = 'analyze'
 
-  const nameHash = hashStr(uploadFiles.value[0]?.name || 'unknown')
-  const style = styleOptions[nameHash % styleOptions.length]
-  const color = colorOptions[(nameHash >> 4) % colorOptions.length]
-  const ti = nameHash % tagPool.length
-  const suggestedTags = [...new Set([tagPool[ti], tagPool[(ti+3)%tagPool.length], tagPool[(ti+7)%tagPool.length], uploadForm.value.tags[0]].filter(Boolean))]
-  const desc = descTemplates[nameHash % descTemplates.length].replace('{style}', style).replace('{color}', color)
+  // 模拟 CLIP 编码延迟（真实 CLIP 约 0.5-2s）
+  setTimeout(() => {
+    const nameHash = hashStr(uploadFiles.value[0]?.name || 'unknown')
+    const styles = ['商业摄影','UI设计稿','平面海报','风光摄影','建筑摄影','室内摄影','美食摄影','宠物摄影','航拍摄影','数字合成']
+    const colors = ['蓝色/冷色调','暖黄/橙色','白色/中性色','红色/金色','深色/暗色调','绿色/自然色']
+    const densities = ['简洁','适中','丰富']
+    const lights = ['自然光','室内灯光','混合光','平光']
+    const tags = ['科技','蓝色','背景','产品','人物','风景','建筑','设计','摄影','室内','户外','简约','现代','商务']
 
-  clipAnalysis.value = {
-    features: [
-      { label:'视觉风格', value:style, conf:85+(nameHash%15), icon:'PictureFilled', bg:'#ecf5ff', color:'#409EFF' },
-      { label:'主色调',   value:color, conf:80+((nameHash>>3)%20), icon:'MagicStick', bg:'#fef0f0', color:'#F56C6C' },
-      { label:'内容密度', value:['简洁','适中','丰富'][(nameHash>>6)%3], conf:70+((nameHash>>5)%25), icon:'Grid', bg:'#f0f9eb', color:'#67C23A' },
-      { label:'光线条件', value:['自然光','室内灯光','混合光','平光'][(nameHash>>8)%4], conf:60+((nameHash>>7)%30), icon:'Sunny', bg:'#fdf6ec', color:'#E6A23C' },
-    ],
-    suggestedTags,
-    semanticDesc: desc,
-  }
-  suggestedTags.forEach(t => { if (!uploadForm.value.tags.includes(t)) uploadForm.value.tags.push(t) })
+    const s = styles[nameHash % styles.length]
+    const c = colors[(nameHash >> 4) % colors.length]
+    const d = densities[(nameHash >> 6) % densities.length]
+    const l = lights[(nameHash >> 8) % lights.length]
+    const ti = nameHash % tags.length
+    const suggestedTags = [tags[ti], tags[(ti + 3) % tags.length], tags[(ti + 7) % tags.length]]
+
+    clipResult.value = {
+      style: s, color: c, density: d, light: l,
+      desc: `${s}图片，整体呈${c}，画面${d}`,
+      tags: suggestedTags,
+    }
+
+    // ★ 自动填充表单
+    formDesc.value = clipResult.value.desc
+    formTags.value = [...suggestedTags]
+    formSource.value = formSource.value || ''
+
+    analyzing.value = false
+    currentStep.value = 'upload'
+  }, 1200)
 }
 
-// ★ 真实上传（FormData + 进度回调）
-async function startUpload() {
+// ===== 步骤 3：确认并上传 =====
+async function confirmAndUpload() {
   uploading.value = true
-  // CLIP 分析保留模拟（后端 CLIP 编码未就绪）
-  simulateCLIPAnalysis()
+  let successCount = 0
+  let failCount = 0
 
   for (const f of uploadFiles.value) {
-    if (f.status === 'done') continue
-    f.status = 'uploading'
-    f.progress = 0
-
+    uploadProgress.value[f.name] = 0
     try {
-      const formData = new FormData()
-      formData.append('file', f.file)
-      formData.append('name', f.name.replace(/\.[^.]+$/, ''))
-      formData.append('description', uploadForm.value.desc || '')
-      formData.append('source', uploadForm.value.source || '')
+      const fd = new FormData()
+      fd.append('file', f.file)
+      fd.append('name', f.name.replace(/\.[^.]+$/, ''))
+      fd.append('description', formDesc.value)
+      fd.append('source', formSource.value)
 
-      await store.uploadAsset(formData, (e: ProgressEvent) => {
-        if (e.total) f.progress = Math.round((e.loaded / e.total) * 100)
+      await store.uploadAsset(fd, (e: ProgressEvent) => {
+        if (e.total) uploadProgress.value[f.name] = Math.round((e.loaded / e.total) * 100)
       })
-      f.progress = 100
-      f.status = 'done'
-      ElMessage.success(`${f.name} 上传完成`)
+      uploadProgress.value[f.name] = 100
+      successCount++
     } catch (e: any) {
-      f.status = 'error'
+      uploadProgress.value[f.name] = -1
+      failCount++
       ElMessage.error(`${f.name} 上传失败：${e?.response?.data?.error?.message || e?.message || '未知错误'}`)
     }
   }
+
   uploading.value = false
+
+  if (failCount === 0) {
+    ElMessage.success(`全部 ${successCount} 个文件上传完成`)
+    // 重置
+    uploadFiles.value = []
+    formDesc.value = ''
+    formTags.value = []
+    formSource.value = ''
+    clipResult.value = null
+    currentStep.value = 'select'
+  } else if (successCount > 0) {
+    ElMessage.warning(`${successCount} 个成功，${failCount} 个失败`)
+  }
 }
+
+// ===== 步骤状态 =====
+const stepStatus = computed(() => ({
+  select: currentStep.value === 'select' ? 'active' : currentStep.value === 'analyze' || currentStep.value === 'upload' ? 'done' : 'pending',
+  analyze: currentStep.value === 'analyze' ? 'active' : currentStep.value === 'upload' ? 'done' : 'pending',
+  upload: currentStep.value === 'upload' ? 'active' : 'pending',
+}))
 </script>
 
 <template>
   <el-alert v-if="auth.isGuest" title="访客无法上传，请先登录编辑或管理员账号" type="warning" show-icon :closable="false" style="margin-bottom:20px" />
 
-  <!-- 步骤 -->
+  <!-- ===== 步骤指示器 ===== -->
   <div style="display:flex;gap:16px;margin-bottom:20px">
-    <div v-for="(step, i) in ['选择图片','CLIP AI 分析','确认入库']" :key="i"
+    <div v-for="(step, i) in [
+      { key:'select', label:'选择图片', desc:'点击或拖拽选择文件' },
+      { key:'analyze', label:'CLIP AI 分析', desc:'自动识别内容并填写信息' },
+      { key:'upload', label:'确认上传', desc:'检查信息后提交入库' },
+    ]" :key="step.key"
       style="flex:1;background:#fff;border-radius:8px;padding:16px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.06);display:flex;align-items:center;gap:12px"
-      :style="{ opacity: (i === 0 || uploadFiles.length > 0) ? 1 : 0.6 }">
-      <span style="width:28px;height:28px;border-radius:50%;background:#7C3AED;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">{{ i + 1 }}</span>
-      <div><b style="font-size:14px;color:#303133">{{ step }}</b></div>
+      :style="{ opacity: currentStep === step.key ? 1 : stepStatus[step.key] === 'done' ? 0.85 : 0.5 }"
+    >
+      <span style="width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;color:#fff"
+        :style="{ background: stepStatus[step.key] === 'done' ? '#67C23A' : stepStatus[step.key] === 'active' ? '#7C3AED' : '#c0c4cc' }">
+        {{ stepStatus[step.key] === 'done' ? '✓' : i + 1 }}
+      </span>
+      <div>
+        <b style="font-size:14px;color:#303133">{{ step.label }}</b>
+        <div style="font-size:12px;color:#909399">{{ step.desc }}</div>
+      </div>
     </div>
   </div>
 
-  <!-- 上传区 -->
+  <!-- ===== 步骤 1：选择文件 ===== -->
   <div :class="['upload-zone', { dragover: dragOver }]"
     @click="triggerUpload" @dragover.prevent="dragOver=true" @dragleave="dragOver=false" @drop.prevent="onDrop">
     <div class="zone-icon"><el-icon><UploadFilled /></el-icon></div>
     <p style="font-size:16px;font-weight:600;color:#303133">点击或拖拽图片到此区域</p>
-    <p class="sub">支持 JPG / PNG / WebP，单文件 ≤20MB · 上传后自动触发 CLIP AI 分析</p>
+    <p class="sub">支持 JPG / PNG / WebP，单文件 ≤20MB</p>
     <input type="file" ref="fileInput" multiple accept="image/jpeg,image/png,image/webp" style="display:none" @change="onFileSelect">
   </div>
 
-  <!-- 预览 -->
-  <div v-if="uploadFiles.length > 0" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px">
-    <div v-for="(f,i) in uploadFiles" :key="i" style="width:130px;text-align:center;background:#fff;border-radius:8px;padding:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06)">
-      <img :src="f.preview" style="width:114px;height:85px;object-fit:cover;border-radius:6px">
-      <div style="font-size:12px;color:#606266;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ f.name }}</div>
-      <el-tag :type="f.status==='done'?'success':f.status==='error'?'danger':f.status==='analyzing'?'':'warning'" size="small">
-        {{ f.status==='done'?'完成':f.status==='error'?'失败':f.status==='analyzing'?'分析中...':'等待' }}
-      </el-tag>
-      <div v-if="f.status==='uploading'" style="margin-top:4px"><el-progress :percentage="f.progress" :stroke-width="4" /></div>
-      <div v-if="f.status==='analyzing'" style="margin-top:4px"><el-progress :percentage="50" :stroke-width="4" :indeterminate="true" /></div>
-    </div>
-  </div>
-
-  <!-- CLIP 分析结果 -->
-  <div v-if="clipAnalysis" class="clip-panel">
-    <div class="panel-title"><el-icon><Cpu /></el-icon>CLIP AI 分析结果</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
-      <div v-for="f in clipAnalysis.features" :key="f.label" style="display:flex;align-items:center;gap:8px;background:#fff;border-radius:6px;padding:10px 14px">
-        <div style="width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px" :style="{background:f.bg,color:f.color}">
-          <el-icon><component :is="f.icon"/></el-icon>
-        </div>
-        <div>
-          <div style="font-size:12px;color:#909399">{{ f.label }}</div>
-          <div style="font-size:14px;font-weight:500;color:#303133">{{ f.value }}</div>
-        </div>
-        <div style="margin-left:auto"><el-progress type="circle" :percentage="f.conf" :width="40" :stroke-width="4" :color="f.color" /></div>
+  <!-- 文件列表 -->
+  <div v-if="hasFiles" style="margin-bottom:20px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <span style="font-size:14px;color:#606266">已选择 <b>{{ uploadFiles.length }}</b> 个文件</span>
+      <div style="display:flex;gap:8px">
+        <el-button
+          v-if="currentStep === 'select'"
+          type="primary" :icon="Cpu"
+          @click="runCLIPAnalysis"
+        >CLIP AI 分析</el-button>
       </div>
     </div>
-    <div style="margin-top:14px;padding-top:14px;border-top:1px solid #e0d4f5;font-size:13px;color:#606266">
-      <b>CLIP 语义描述：</b>{{ clipAnalysis.semanticDesc }}
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <div v-for="(f, i) in uploadFiles" :key="i"
+        style="position:relative;width:130px;text-align:center;background:#fff;border-radius:8px;padding:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06)"
+      >
+        <img :src="f.preview" style="width:114px;height:85px;object-fit:cover;border-radius:6px">
+        <div style="font-size:12px;color:#606266;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ f.name }}</div>
+        <div v-if="uploadProgress[f.name] !== undefined && uploadProgress[f.name] >= 0" style="margin-top:4px">
+          <el-progress :percentage="uploadProgress[f.name]" :stroke-width="4" :status="uploadProgress[f.name] === 100 ? 'success' : undefined" />
+        </div>
+        <div v-else-if="uploadProgress[f.name] === -1" style="margin-top:4px">
+          <el-tag type="danger" size="small">失败</el-tag>
+        </div>
+        <el-button v-if="currentStep === 'select'"
+          style="position:absolute;top:2px;right:2px"
+          size="small" type="danger" circle :icon="Close"
+          @click="removeFile(i)"
+        />
+      </div>
     </div>
   </div>
 
-  <!-- 表单 -->
-  <div v-if="uploadFiles.length > 0" style="background:#fff;border-radius:8px;padding:24px;box-shadow:0 1px 4px rgba(0,0,0,0.06)">
-    <h3 style="margin-bottom:16px;font-size:15px">素材元数据</h3>
-    <el-form label-width="80px">
-      <el-form-item label="描述">
-        <el-input v-model="uploadForm.desc" type="textarea" :rows="2" placeholder="补充描述..." />
-      </el-form-item>
-      <el-form-item label="标签">
-        <el-select v-model="uploadForm.tags" multiple placeholder="选择标签" style="width:100%" filterable allow-create>
-          <el-option v-for="t in store.allTags" :key="t" :label="t" :value="t" />
-        </el-select>
-      </el-form-item>
-      <el-form-item label="来源">
-        <el-input v-model="uploadForm.source" placeholder="设计部、外包团队..." />
-      </el-form-item>
-      <el-form-item>
-        <el-button type="primary" @click="startUpload" :disabled="uploading" :loading="uploading">
-          {{ uploading ? '处理中...' : '开始上传 + CLIP AI 分析' }}
-        </el-button>
-        <el-button @click="uploadFiles=[];clipAnalysis=null">清空</el-button>
-      </el-form-item>
-    </el-form>
+  <!-- ===== 步骤 2：CLIP 分析中 ===== -->
+  <div v-if="analyzing" class="clip-panel">
+    <div class="panel-title"><el-icon><Cpu /></el-icon>CLIP 正在分析中...</div>
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 0">
+      <el-progress :percentage="100" :indeterminate="true" :stroke-width="4" style="flex:1" />
+      <span style="font-size:12px;color:#909399;white-space:nowrap">模拟编码中（真实 CLIP 接入后替换）</span>
+    </div>
+  </div>
+
+  <!-- ===== 步骤 2 完成：CLIP 分析结果 + 可编辑表单 ===== -->
+  <div v-if="clipResult && currentStep === 'upload'">
+    <!-- CLIP 结果展示 -->
+    <div class="clip-panel">
+      <div class="panel-title">
+        <el-icon><Cpu /></el-icon>CLIP AI 分析结果
+        <el-tag size="small" type="warning" style="margin-left:8px">模拟</el-tag>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">
+        <div style="background:#fff;border-radius:6px;padding:10px 14px;text-align:center">
+          <div style="font-size:11px;color:#909399">视觉风格</div>
+          <div style="font-size:14px;font-weight:600;color:#303133;margin-top:2px">{{ clipResult.style }}</div>
+        </div>
+        <div style="background:#fff;border-radius:6px;padding:10px 14px;text-align:center">
+          <div style="font-size:11px;color:#909399">主色调</div>
+          <div style="font-size:14px;font-weight:600;color:#303133;margin-top:2px">{{ clipResult.color }}</div>
+        </div>
+        <div style="background:#fff;border-radius:6px;padding:10px 14px;text-align:center">
+          <div style="font-size:11px;color:#909399">内容密度</div>
+          <div style="font-size:14px;font-weight:600;color:#303133;margin-top:2px">{{ clipResult.density }}</div>
+        </div>
+        <div style="background:#fff;border-radius:6px;padding:10px 14px;text-align:center">
+          <div style="font-size:11px;color:#909399">光线条件</div>
+          <div style="font-size:14px;font-weight:600;color:#303133;margin-top:2px">{{ clipResult.light }}</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:#c0c4cc;text-align:center">
+        ⚡ CLIP 分析目前为前端模拟。真实 Chinese-CLIP 接入后，将返回 512 维语义向量用于搜索。
+      </div>
+    </div>
+
+    <!-- 可编辑表单 -->
+    <div style="background:#fff;border-radius:8px;padding:24px;box-shadow:0 1px 4px rgba(0,0,0,0.06)">
+      <h3 style="margin-bottom:16px;font-size:15px;display:flex;align-items:center;gap:8px">
+        确认素材信息
+        <span style="font-size:12px;color:#909399;font-weight:400">CLIP 已自动填写，可手动修改</span>
+      </h3>
+      <el-form label-width="80px">
+        <el-form-item label="描述">
+          <el-input v-model="formDesc" type="textarea" :rows="2" placeholder="CLIP 自动生成的描述" />
+        </el-form-item>
+        <el-form-item label="标签">
+          <el-select v-model="formTags" multiple placeholder="CLIP 建议的标签" style="width:100%" filterable allow-create>
+            <el-option v-for="t in store.allTags" :key="t" :label="t" :value="t" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="来源">
+          <el-input v-model="formSource" placeholder="设计部、外包团队..." />
+        </el-form-item>
+        <el-form-item>
+          <div style="display:flex;gap:8px">
+            <el-button type="primary" size="large" :loading="uploading" @click="confirmAndUpload">
+              <el-icon><UploadFilled /></el-icon> 确认上传（{{ uploadFiles.length }} 个文件）
+            </el-button>
+            <el-button size="large" @click="runCLIPAnalysis">重新分析</el-button>
+            <el-button size="large" @click="uploadFiles=[];clipResult=null;currentStep='select'">重新选择</el-button>
+          </div>
+        </el-form-item>
+      </el-form>
+    </div>
   </div>
 </template>
