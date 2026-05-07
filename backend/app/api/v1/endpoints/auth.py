@@ -1,8 +1,9 @@
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Request, status
 
+from app.core.auth_context import get_current_user, require_admin
 from app.core.exceptions import ApiError
-from app.core.security import create_access_token, decode_access_token, hash_password, verify_password
+from app.core.security import create_access_token, hash_password, verify_password
 from app.repositories import user_repository
 
 router = APIRouter()
@@ -34,27 +35,6 @@ def _token_response(username: str, role: str) -> TokenResponse:
     return TokenResponse(access_token=token, expires_in=expires_in, role=role)
 
 
-def _read_current_user(request: Request) -> dict:
-    token = getattr(request.state, "access_token", None)
-    if not token:
-        raise ApiError(status_code=401, code="MISSING_TOKEN", message="Authorization token is required.")
-
-    payload = decode_access_token(token)
-    username = payload.get("sub")
-    if not username:
-        raise ApiError(status_code=401, code="INVALID_TOKEN", message="Token subject is missing.")
-
-    user = user_repository.get_user_by_username(username)
-    if user is None:
-        raise ApiError(status_code=401, code="USER_NOT_FOUND", message="User for this token does not exist.")
-    return user
-
-
-def _require_admin(user: dict) -> None:
-    if user["role"] != ADMIN_ROLE:
-        raise ApiError(status_code=403, code="FORBIDDEN", message="Admin role is required for this operation.")
-
-
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def register(payload: CredentialsRequest) -> TokenResponse:
     existed = user_repository.get_user_by_username(payload.username)
@@ -78,7 +58,7 @@ async def login(payload: CredentialsRequest) -> TokenResponse:
 
 @router.get("/me", response_model=UserResponse)
 async def me(request: Request) -> UserResponse:
-    user = _read_current_user(request)
+    user = get_current_user(request, required=True)
     return UserResponse(
         id=user["id"],
         username=user["username"],
@@ -89,8 +69,8 @@ async def me(request: Request) -> UserResponse:
 
 @router.get("/users", response_model=list[UserResponse])
 async def list_users(request: Request) -> list[UserResponse]:
-    current_user = _read_current_user(request)
-    _require_admin(current_user)
+    current_user = get_current_user(request, required=True)
+    require_admin(current_user)
 
     users = user_repository.list_users()
     return [
