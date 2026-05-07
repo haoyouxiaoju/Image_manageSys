@@ -1,0 +1,78 @@
+// ===== 共享类型定义 =====
+
+export interface User {
+  id: number
+  username: string
+  created_at: string
+}
+
+export type Role = 'admin' | 'editor' | 'guest'
+
+export interface AssetVersion {
+  version: string
+  note: string
+  date: string
+}
+
+export interface Asset {
+  id: number
+  name: string
+  desc: string
+  thumb: string
+  author: string
+  date: string
+  tags: string[]
+  source: string
+  size: string
+  format: string
+  clipDesc?: string
+  clipStyle?: string
+  clipColor?: string
+  clipTags?: string[]
+  versions: AssetVersion[]
+}
+
+export interface SearchResult extends Asset {
+  score: number
+  matchReasons: string[]
+}
+
+export interface Collection {
+  id: number
+  name: string
+  desc: string
+  assetIds: number[]
+  created: string
+  creator: string
+}
+
+export interface AuditLog {
+  time: string
+  user: string
+  action: string
+  target: string
+  ip: string
+}
+
+export interface LoginCredentials {
+  username: string
+  password: string
+}
+
+export interface TokenResponse {
+  access_token: string
+  token_type: string
+}
+
+export interface PaginatedResponse<T> {
+  items: T[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface UploadFormData {
+  desc: string
+  tags: string[]
+  source: string
+}
