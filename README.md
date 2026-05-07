@@ -26,6 +26,7 @@ scripts/                # 脚本目录
 - `docs/plans/PLAN-TEMPLATE.md`
 - `docs/plans/PLAN-20260507-git-version-planning.md`
 - `docs/plans/PLAN-20260507-rbac-m1.md`
+- `docs/plans/PLAN-20260507-assets-crud-m2.md`
 
 ## 规划中的轻量技术栈
 
@@ -123,4 +124,15 @@ Invoke-RestMethod -Method Get `
 ```
 
 当 token 对应 `admin` 角色时返回用户列表；非 admin 返回 `403`。
+
+## 素材接口（M2 已实现）
+
+- `POST /api/v1/assets/upload`（需登录，admin/editor）
+  - 支持：`JPG/PNG/WebP`
+  - 大小限制：`<=20MB`
+- `GET /api/v1/assets?page=1&page_size=10&query=...`（访客可读）
+- `GET /api/v1/assets/{id}`（访客可读）
+- `PUT /api/v1/assets/{id}`（admin 可改全部，editor 仅可改自己上传）
+- `DELETE /api/v1/assets/{id}`（admin 可删全部，editor 仅可删自己上传）
+- `GET /api/v1/assets/{id}/download`（需登录，guest 禁止）
 
