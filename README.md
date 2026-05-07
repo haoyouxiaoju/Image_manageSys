@@ -2,7 +2,7 @@
 
 基于 **Chinese-CLIP** 的企业素材库系统（轻量 MVP）项目骨架。
 
-当前状态：已完成后端基础代码基线（`v0.1.0`、`/api/v1`、核心中间件、健康检查、注册/登录/JWT 登录态校验、基础角色权限）。
+当前状态：已完成后端 P0 对接接口（认证、素材、版本、标签、分组、分享、审计）；P1 待实现项为文本检索与 CLIP 分析。
 
 ## 目录结构
 
@@ -27,6 +27,7 @@ scripts/                # 脚本目录
 - `docs/plans/PLAN-20260507-git-version-planning.md`
 - `docs/plans/PLAN-20260507-rbac-m1.md`
 - `docs/plans/PLAN-20260507-assets-crud-m2.md`
+- `docs/plans/PLAN-20260507-p0-api-completion.md`
 
 ## 规划中的轻量技术栈
 
@@ -135,4 +136,13 @@ Invoke-RestMethod -Method Get `
 - `PUT /api/v1/assets/{id}`（admin 可改全部，editor 仅可改自己上传）
 - `DELETE /api/v1/assets/{id}`（admin 可删全部，editor 仅可删自己上传）
 - `GET /api/v1/assets/{id}/download`（需登录，guest 禁止）
+- `POST /api/v1/assets/{id}/versions`（需登录，admin/editor）
+- `GET /api/v1/assets/{id}/versions`（访客可读）
+
+## 其他 P0 对接接口（已实现）
+
+- 标签：`GET/POST/DELETE /api/v1/tags`
+- 分组：`GET/POST /api/v1/collections`、`GET/PUT/DELETE /api/v1/collections/{id}`、`POST /api/v1/collections/{id}/assets`、`DELETE /api/v1/collections/{id}/assets/{asset_id}`
+- 分享：`GET/POST/DELETE /api/v1/share-links`
+- 审计：`GET /api/v1/audit-logs`（admin）
 

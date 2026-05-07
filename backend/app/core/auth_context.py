@@ -27,3 +27,8 @@ def require_admin(user: dict) -> None:
     if user["role"] != "admin":
         raise ApiError(status_code=403, code="FORBIDDEN", message="Admin role is required for this operation.")
 
+
+def require_editor_or_admin(user: dict) -> None:
+    if user["role"] not in {"admin", "editor"}:
+        raise ApiError(status_code=403, code="FORBIDDEN", message="Editor or admin role is required.")
+

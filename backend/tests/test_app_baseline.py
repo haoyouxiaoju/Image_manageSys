@@ -22,8 +22,15 @@ client = TestClient(app)
 
 def _reset_users_table() -> None:
     with sqlite3.connect(TEST_DB_PATH) as conn:
-        conn.execute("DELETE FROM users")
+        conn.execute("DELETE FROM share_links")
+        conn.execute("DELETE FROM collection_assets")
+        conn.execute("DELETE FROM collections")
+        conn.execute("DELETE FROM asset_tags")
+        conn.execute("DELETE FROM tags")
+        conn.execute("DELETE FROM asset_versions")
+        conn.execute("DELETE FROM audit_logs")
         conn.execute("DELETE FROM assets")
+        conn.execute("DELETE FROM users")
         conn.commit()
     if TEST_UPLOADS_DIR.exists():
         shutil.rmtree(TEST_UPLOADS_DIR)
@@ -258,4 +265,101 @@ def test_assets_upload_validation_and_download_auth() -> None:
     download_without_auth = client.get(f"/api/v1/assets/{asset_id}/download")
     assert download_without_auth.status_code == 401
     assert download_without_auth.json()["error"]["code"] == "MISSING_TOKEN"
+
+
+def test_assets_versions_and_tags() -> None:
+    _reset_users_table()
+    token = _register_and_login(f"admin_{uuid4().hex[:8]}")
+
+    uploaded = client.post(
+        "/api/v1/assets/upload",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("base.png", b"BASEPNG", "image/png")},
+        data={"tags": '["海报","科技感"]'},
+    )
+    assert uploaded.status_code == 200
+    asset_id = uploaded.json()["id"]
+    assert set(uploaded.json()["tags"]) == {"海报", "科技感"}
+
+    version_resp = client.post(
+        f"/api/v1/assets/{asset_id}/versions",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("v2.png", b"V2PNG", "image/png")},
+        data={"version": "v1.1", "note": "颜色优化"},
+    )
+    assert version_resp.status_code == 200
+    assert version_resp.json()["version"] == "v1.1"
+
+    versions = client.get(f"/api/v1/assets/{asset_id}/versions")
+    assert versions.status_code == 200
+    assert len(versions.json()) == 1
+
+    update = client.put(
+        f"/api/v1/assets/{asset_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"tags": ["产品图", "科技感"]},
+    )
+    assert update.status_code == 200
+    assert set(update.json()["tags"]) == {"产品图", "科技感"}
+
+    tags_resp = client.get("/api/v1/tags")
+    assert tags_resp.status_code == 200
+    assert any(item["name"] == "产品图" for item in tags_resp.json())
+
+
+def test_collections_share_links_and_audit_logs() -> None:
+    _reset_users_table()
+    admin_token = _register_and_login(f"admin_{uuid4().hex[:8]}")
+    editor_token = _register_and_login(f"editor_{uuid4().hex[:8]}")
+
+    uploaded = client.post(
+        "/api/v1/assets/upload",
+        headers={"Authorization": f"Bearer {editor_token}"},
+        files={"file": ("asset.webp", b"ASSET", "image/webp")},
+        data={"name": "shared-asset"},
+    )
+    assert uploaded.status_code == 200
+    asset_id = uploaded.json()["id"]
+
+    create_col = client.post(
+        "/api/v1/collections",
+        headers={"Authorization": f"Bearer {editor_token}"},
+        json={"name": "我的分组", "description": "测试"},
+    )
+    assert create_col.status_code == 201
+    collection_id = create_col.json()["id"]
+
+    add_rel = client.post(
+        f"/api/v1/collections/{collection_id}/assets",
+        headers={"Authorization": f"Bearer {editor_token}"},
+        json={"asset_id": asset_id},
+    )
+    assert add_rel.status_code == 200
+
+    detail = client.get(f"/api/v1/collections/{collection_id}")
+    assert detail.status_code == 200
+    assert detail.json()["asset_count"] == 1
+    assert len(detail.json()["assets"]) == 1
+
+    create_share = client.post(
+        "/api/v1/share-links",
+        headers={"Authorization": f"Bearer {editor_token}"},
+        json={"asset_id": asset_id, "expires_in_hours": 24},
+    )
+    assert create_share.status_code == 201
+    share_id = create_share.json()["id"]
+    assert create_share.json()["is_active"] is True
+
+    revoke = client.delete(
+        f"/api/v1/share-links/{share_id}",
+        headers={"Authorization": f"Bearer {editor_token}"},
+    )
+    assert revoke.status_code == 200
+
+    logs_forbidden = client.get("/api/v1/audit-logs", headers={"Authorization": f"Bearer {editor_token}"})
+    assert logs_forbidden.status_code == 403
+
+    logs_ok = client.get("/api/v1/audit-logs", headers={"Authorization": f"Bearer {admin_token}"})
+    assert logs_ok.status_code == 200
+    assert len(logs_ok.json()) >= 1
 
