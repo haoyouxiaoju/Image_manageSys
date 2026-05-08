@@ -188,6 +188,7 @@ def test_assets_upload_and_pagination() -> None:
     asset = upload_response.json()
     assert asset["name"] == "demo"
     assert asset["mime_type"] == "image/png"
+    assert asset["clip_analysis"]["provider"] == "mock"
     assert asset["clip_analysis"]["status"] == "ready"
     assert asset["clip_analysis"]["embedding_dim"] == 32
 
@@ -388,6 +389,7 @@ def test_clip_status_and_manual_analyze() -> None:
     )
     assert analyze_resp.status_code == 200
     data = analyze_resp.json()
+    assert data["provider"] == "mock"
     assert data["model"] == "mock-clip"
     assert data["embedding_dim"] == 32
     assert len(data["suggested_tags"]) >= 1
@@ -424,6 +426,7 @@ def test_search_text_semantic_pagination() -> None:
     assert payload["page_size"] == 2
     assert len(payload["items"]) == 2
     assert payload["items"][0]["score"] >= payload["items"][1]["score"]
+    assert payload["items"][0]["asset"]["clip_analysis"]["provider"] == "mock"
     assert payload["items"][0]["asset"]["clip_analysis"]["status"] == "ready"
 
     second_page = client.post(

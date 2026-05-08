@@ -7,6 +7,7 @@ from app.core.database import get_connection
 def upsert_clip_analysis(
     asset_id: int,
     status: str,
+    provider: str,
     model_name: str | None,
     model_version: str | None,
     embedding: list[float] | None,
@@ -24,12 +25,13 @@ def upsert_clip_analysis(
         conn.execute(
             """
             INSERT INTO asset_clip_analysis (
-                asset_id, status, model_name, model_version, embedding_json, embedding_dim, features_json,
+                asset_id, status, provider, model_name, model_version, embedding_json, embedding_dim, features_json,
                 suggested_description, suggested_tags_json, error_message, analyzed_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
             ON CONFLICT(asset_id) DO UPDATE SET
                 status = excluded.status,
+                provider = excluded.provider,
                 model_name = excluded.model_name,
                 model_version = excluded.model_version,
                 embedding_json = excluded.embedding_json,
@@ -43,6 +45,7 @@ def upsert_clip_analysis(
             (
                 asset_id,
                 status,
+                provider,
                 model_name,
                 model_version,
                 embedding_json,
@@ -60,7 +63,7 @@ def get_clip_analysis(asset_id: int) -> dict | None:
     with get_connection() as conn:
         row = conn.execute(
             """
-            SELECT asset_id, status, model_name, model_version, embedding_json, embedding_dim, features_json,
+            SELECT asset_id, status, provider, model_name, model_version, embedding_json, embedding_dim, features_json,
                    suggested_description, suggested_tags_json, error_message, analyzed_at
             FROM asset_clip_analysis
             WHERE asset_id = ?
@@ -86,7 +89,7 @@ def list_ready_embeddings_assets() -> list[dict]:
             SELECT
                 a.id, a.name, a.description, a.source, a.file_name, a.file_path, a.file_size, a.mime_type,
                 a.uploaded_by, a.created_at, a.updated_at,
-                c.status, c.model_name, c.model_version, c.embedding_json, c.embedding_dim,
+                c.status, c.provider, c.model_name, c.model_version, c.embedding_json, c.embedding_dim,
                 c.features_json, c.suggested_description, c.suggested_tags_json, c.error_message, c.analyzed_at
             FROM asset_clip_analysis c
             JOIN assets a ON a.id = c.asset_id

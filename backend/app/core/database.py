@@ -149,6 +149,7 @@ def init_database() -> None:
             CREATE TABLE IF NOT EXISTS asset_clip_analysis (
                 asset_id INTEGER PRIMARY KEY,
                 status TEXT NOT NULL,
+                provider TEXT NOT NULL DEFAULT 'chinese_clip',
                 model_name TEXT,
                 model_version TEXT,
                 embedding_json TEXT,
@@ -162,5 +163,8 @@ def init_database() -> None:
             )
             """
         )
+        clip_columns = {row["name"] for row in conn.execute("PRAGMA table_info(asset_clip_analysis)").fetchall()}
+        if "provider" not in clip_columns:
+            conn.execute("ALTER TABLE asset_clip_analysis ADD COLUMN provider TEXT NOT NULL DEFAULT 'chinese_clip'")
         conn.commit()
 

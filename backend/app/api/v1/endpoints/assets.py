@@ -33,6 +33,7 @@ class AssetVersionResponse(BaseModel):
 
 
 class ClipAnalysisResponse(BaseModel):
+    provider: str | None = None
     status: str
     model_name: str | None = None
     model_version: str | None = None
@@ -81,6 +82,7 @@ def _to_clip_analysis_response(data: dict | None, include_embedding: bool) -> Cl
         return None
     embedding = data["embedding"] if include_embedding else None
     return ClipAnalysisResponse(
+        provider=data["provider"],
         status=data["status"],
         model_name=data["model_name"],
         model_version=data["model_version"],
@@ -167,6 +169,7 @@ def _persist_clip_analysis_success(asset_id: int, analysis: Any) -> None:
     clip_repository.upsert_clip_analysis(
         asset_id=asset_id,
         status="ready",
+        provider=analysis.provider,
         model_name=analysis.model_name,
         model_version=analysis.model_version,
         embedding=analysis.embedding,
@@ -182,6 +185,7 @@ def _persist_clip_analysis_failure(asset_id: int, message: str) -> None:
     clip_repository.upsert_clip_analysis(
         asset_id=asset_id,
         status="failed",
+        provider=clip_status["provider"],
         model_name=clip_status["model_name"],
         model_version=clip_status["model_version"],
         embedding=None,

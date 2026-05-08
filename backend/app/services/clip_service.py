@@ -13,17 +13,57 @@ logger = logging.getLogger(__name__)
 
 STYLE_LABELS = ["产品摄影", "商务海报", "写实风格", "极简风格", "科技风格"]
 COLOR_LABELS = ["暖色调", "冷色调", "高对比", "低饱和", "明亮"]
-SCENE_LABELS = ["室内", "室外", "办公环境", "电商场景", "自然环境"]
-OBJECT_LABELS = ["人物", "电脑", "手机", "文档", "建筑", "车辆", "食物", "植物", "宠物", "商品"]
+SCENE_LABELS = ["室内", "室外", "办公环境", "电商场景", "自然环境", "图书馆", "书桌", "书架", "阅读场景"]
+OBJECT_LABELS = [
+    "人物",
+    "电脑",
+    "手机",
+    "文档",
+    "建筑",
+    "车辆",
+    "食物",
+    "植物",
+    "宠物",
+    "商品",
+    "书籍",
+    "书本",
+    "书页",
+    "书封面",
+    "纸张",
+    "笔记本",
+    "杂志",
+    "文件",
+    "教材",
+    "报纸",
+]
+TEXT_LABELS = [
+    "书籍",
+    "书本",
+    "书页",
+    "书封面",
+    "纸张",
+    "笔记本",
+    "杂志",
+    "文件",
+    "教材",
+    "报纸",
+    "文档",
+    "商品",
+    "产品摄影",
+    "静物摄影",
+]
+CONTENT_LABELS = TEXT_LABELS[:11] + ["商品"]
 
 MOCK_STYLE_LABELS = ["产品摄影", "商务素材", "品牌宣传", "技术插图"]
 MOCK_COLOR_LABELS = ["暖色调", "冷色调", "中性色调"]
 MOCK_SCENE_LABELS = ["室内", "室外", "办公环境"]
-MOCK_OBJECT_LABELS = ["商品", "人物", "文档", "设备", "食物", "植物"]
+MOCK_OBJECT_LABELS = ["商品", "人物", "文档", "设备", "食物", "植物", "书籍", "书本", "书页"]
+MOCK_CONTENT_LABELS = ["书籍", "书本", "书页", "书封面", "文档", "笔记本", "杂志", "文件", "教材", "报纸", "商品"]
 
 
 @dataclass
 class ClipAnalysisResult:
+    provider: str
     model_name: str
     model_version: str
     embedding: list[float]
@@ -154,18 +194,20 @@ class ClipService:
         style = MOCK_STYLE_LABELS[digest[0] % len(MOCK_STYLE_LABELS)]
         color = MOCK_COLOR_LABELS[digest[1] % len(MOCK_COLOR_LABELS)]
         scene = MOCK_SCENE_LABELS[digest[2] % len(MOCK_SCENE_LABELS)]
+        content = MOCK_CONTENT_LABELS[digest[5] % len(MOCK_CONTENT_LABELS)]
         objects = [
             MOCK_OBJECT_LABELS[digest[3] % len(MOCK_OBJECT_LABELS)],
             MOCK_OBJECT_LABELS[digest[4] % len(MOCK_OBJECT_LABELS)],
         ]
         objects = list(dict.fromkeys(objects))
-        suggested_tags = list(dict.fromkeys([style, color, scene, *objects]))
+        suggested_tags = list(dict.fromkeys([style, color, scene, content, *objects]))
         return ClipAnalysisResult(
+            provider="mock",
             model_name="mock-clip",
             model_version="mock-v1",
             embedding=embedding,
-            features={"style": style, "color_tone": color, "scene": scene, "objects": objects},
-            suggested_description=f"{style}，{scene}，{color}，主体包含：{'、'.join(objects)}",
+            features={"style": style, "color_tone": color, "scene": scene, "content": content, "objects": objects},
+            suggested_description=f"{style}，{scene}，{color}，主体：{content}，包含：{'、'.join(objects)}",
             suggested_tags=suggested_tags,
         )
 
@@ -197,14 +239,16 @@ class ClipService:
             style = self._top_label(image_features, STYLE_LABELS)
             color = self._top_label(image_features, COLOR_LABELS)
             scene = self._top_label(image_features, SCENE_LABELS)
-            objects = self._top_labels(image_features, OBJECT_LABELS, top_k=3)
-            suggested_tags = list(dict.fromkeys([style, color, scene, *objects]))
+            content = self._top_label(image_features, CONTENT_LABELS)
+            objects = self._top_labels(image_features, OBJECT_LABELS, top_k=5)
+            suggested_tags = list(dict.fromkeys([style, color, scene, content, *objects]))
             return ClipAnalysisResult(
+                provider="chinese_clip",
                 model_name=settings.clip_model_name,
                 model_version=settings.clip_model_revision,
                 embedding=embedding,
-                features={"style": style, "color_tone": color, "scene": scene, "objects": objects},
-                suggested_description=f"{style}，{scene}，{color}，主体包含：{'、'.join(objects)}",
+                features={"style": style, "color_tone": color, "scene": scene, "content": content, "objects": objects},
+                suggested_description=f"{style}，{scene}，{color}，主体：{content}，包含：{'、'.join(objects)}",
                 suggested_tags=suggested_tags,
             )
         except (RuntimeError, ValueError, OSError) as exc:
@@ -266,6 +310,56 @@ class ClipService:
                 status_code=500,
                 code="CLIP_TEXT_ENCODE_FAILED",
                 message=f"CLIP text encode failed: {exc}",
+            ) from exc
+
+    def rank_text_labels(self, text: str, labels: list[str]) -> list[tuple[str, float]]:
+        self._ensure_ready()
+        if self._provider == "mock":
+            return self._rank_text_labels_mock(text, labels)
+        return self._rank_text_labels_chinese_clip(text, labels)
+
+    def _rank_text_labels_mock(self, text: str, labels: list[str]) -> list[tuple[str, float]]:
+        text_bytes = sha256(text.encode("utf-8")).digest()
+        scored = []
+        for index, label in enumerate(labels):
+            label_bytes = sha256(f"{text}|{label}".encode("utf-8")).digest()
+            score = ((text_bytes[index % len(text_bytes)] + label_bytes[(index * 7) % len(label_bytes)]) % 1000) / 1000.0
+            scored.append((label, score))
+        scored.sort(key=lambda item: item[1], reverse=True)
+        return scored
+
+    def _rank_text_labels_chinese_clip(self, text: str, labels: list[str]) -> list[tuple[str, float]]:
+        torch = self._torch
+        model = self._model
+        processor = self._processor
+        if torch is None or model is None or processor is None:
+            raise ApiError(status_code=503, code="CLIP_MODEL_UNAVAILABLE", message="CLIP internals are not ready.")
+
+        try:
+            query_inputs = processor(text=[text], return_tensors="pt", padding=True, truncation=True)
+            query_inputs = {
+                key: value.to(self._device) if hasattr(value, "to") else value
+                for key, value in query_inputs.items()
+            }
+            label_inputs = processor(text=labels, return_tensors="pt", padding=True, truncation=True)
+            label_inputs = {
+                key: value.to(self._device) if hasattr(value, "to") else value
+                for key, value in label_inputs.items()
+            }
+            with torch.no_grad():
+                query_features = model.get_text_features(**query_inputs)
+                label_features = model.get_text_features(**label_inputs)
+            query_features = query_features / query_features.norm(dim=-1, keepdim=True)
+            label_features = label_features / label_features.norm(dim=-1, keepdim=True)
+            scores = (query_features @ label_features.T)[0]
+            ranked = [(label, float(scores[index].item())) for index, label in enumerate(labels)]
+            ranked.sort(key=lambda item: item[1], reverse=True)
+            return ranked
+        except (RuntimeError, ValueError, OSError) as exc:
+            raise ApiError(
+                status_code=500,
+                code="CLIP_TEXT_RANK_FAILED",
+                message=f"CLIP text rank failed: {exc}",
             ) from exc
 
     @staticmethod

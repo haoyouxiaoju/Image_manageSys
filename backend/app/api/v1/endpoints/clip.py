@@ -15,6 +15,7 @@ ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 
 class ClipAnalyzeResponse(BaseModel):
+    provider: str
     model: str
     model_version: str
     embedding: list[float]
@@ -53,6 +54,7 @@ async def clip_analyze(request: Request, file: UploadFile = File(...)) -> ClipAn
             temp_path.unlink()
 
     return ClipAnalyzeResponse(
+        provider=result.provider,
         model=result.model_name,
         model_version=result.model_version,
         embedding=result.embedding,

@@ -58,6 +58,7 @@ def _build_asset_payload(row: dict) -> dict[str, Any]:
         "updated_at": row["updated_at"],
         "download_url": f"/api/v1/assets/{asset_id}/download",
         "clip_analysis": {
+            "provider": row["provider"],
             "status": row["status"],
             "model_name": row["model_name"],
             "model_version": row["model_version"],

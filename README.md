@@ -154,6 +154,8 @@ Invoke-RestMethod -Method Get `
 
 - `GET /api/v1/clip/status`：查看模型服务状态（enabled/provider/ready/last_error）
 - `POST /api/v1/clip/analyze`：上传图片执行 CLIP 分析（需登录，admin/editor）
+- 返回会包含 `provider`，`chinese_clip` 表示真实模型，`mock` 只用于本地/测试。
+- 结果中的 `content` 是基于候选标签集的零样本语义标签，不是 OCR 或标题生成。
 
 ## 语义检索接口（已实现）
 
