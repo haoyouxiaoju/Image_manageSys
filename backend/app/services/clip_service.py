@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from hashlib import sha256
+import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -11,54 +12,43 @@ from app.core.exceptions import ApiError
 
 logger = logging.getLogger(__name__)
 
-STYLE_LABELS = ["产品摄影", "商务海报", "写实风格", "极简风格", "科技风格"]
-COLOR_LABELS = ["暖色调", "冷色调", "高对比", "低饱和", "明亮"]
-SCENE_LABELS = ["室内", "室外", "办公环境", "电商场景", "自然环境", "图书馆", "书桌", "书架", "阅读场景"]
-OBJECT_LABELS = [
-    "人物",
-    "电脑",
-    "手机",
-    "文档",
-    "建筑",
-    "车辆",
-    "食物",
-    "植物",
-    "宠物",
-    "商品",
-    "书籍",
-    "书本",
-    "书页",
-    "书封面",
-    "纸张",
-    "笔记本",
-    "杂志",
-    "文件",
-    "教材",
-    "报纸",
-]
-TEXT_LABELS = [
-    "书籍",
-    "书本",
-    "书页",
-    "书封面",
-    "纸张",
-    "笔记本",
-    "杂志",
-    "文件",
-    "教材",
-    "报纸",
-    "文档",
-    "商品",
-    "产品摄影",
-    "静物摄影",
-]
-CONTENT_LABELS = TEXT_LABELS[:11] + ["商品"]
+_LABELS_PATH = Path(__file__).resolve().parents[3] / "data" / "labels.json"
 
-MOCK_STYLE_LABELS = ["产品摄影", "商务素材", "品牌宣传", "技术插图"]
-MOCK_COLOR_LABELS = ["暖色调", "冷色调", "中性色调"]
-MOCK_SCENE_LABELS = ["室内", "室外", "办公环境"]
-MOCK_OBJECT_LABELS = ["商品", "人物", "文档", "设备", "食物", "植物", "书籍", "书本", "书页"]
-MOCK_CONTENT_LABELS = ["书籍", "书本", "书页", "书封面", "文档", "笔记本", "杂志", "文件", "教材", "报纸", "商品"]
+_DEFAULT_LABELS: dict[str, list[str]] = {
+    "style": ["产品摄影", "商务海报", "写实风格", "极简风格", "科技风格"],
+    "color": ["暖色调", "冷色调", "高对比", "低饱和", "明亮"],
+    "scene": ["室内", "室外", "办公环境", "电商场景", "自然环境", "图书馆", "书桌", "书架", "阅读场景"],
+    "content": ["书籍", "书本", "书页", "书封面", "翻开的书", "闭合的书", "纸张", "笔记本", "杂志", "文件", "教材", "报纸", "文档", "商品"],
+    "objects": [
+        "人物", "电脑", "手机", "文档", "建筑", "车辆", "食物", "植物", "宠物", "商品",
+        "书籍", "书本", "书页", "书封面", "翻开的书", "闭合的书", "纸张", "笔记本", "杂志", "文件", "教材", "报纸",
+    ],
+}
+
+
+def _load_labels() -> dict[str, list[str]]:
+    if _LABELS_PATH.exists():
+        try:
+            with open(_LABELS_PATH, encoding="utf-8") as f:
+                data = json.load(f)
+            loaded: dict[str, list[str]] = {}
+            for key in ("style", "color", "scene", "content", "objects"):
+                items = data.get(key)
+                if isinstance(items, list) and all(isinstance(v, str) for v in items):
+                    loaded[key] = items
+                else:
+                    logger.warning("labels.json missing or invalid key '%s', using defaults.", key)
+                    loaded[key] = _DEFAULT_LABELS[key]
+            logger.info("Loaded %d label categories from %s", len(loaded), _LABELS_PATH)
+            return loaded
+        except (json.JSONDecodeError, OSError) as exc:
+            logger.warning("Failed to load labels.json (%s), using defaults.", exc)
+    else:
+        logger.info("labels.json not found at %s, using built-in defaults.", _LABELS_PATH)
+    return dict(_DEFAULT_LABELS)
+
+
+_LABELS = _load_labels()
 
 
 @dataclass
@@ -191,13 +181,13 @@ class ClipService:
     def _analyze_mock(self, image_path: Path) -> ClipAnalysisResult:
         digest = sha256(image_path.read_bytes()).digest()
         embedding = self._digest_to_embedding(digest)
-        style = MOCK_STYLE_LABELS[digest[0] % len(MOCK_STYLE_LABELS)]
-        color = MOCK_COLOR_LABELS[digest[1] % len(MOCK_COLOR_LABELS)]
-        scene = MOCK_SCENE_LABELS[digest[2] % len(MOCK_SCENE_LABELS)]
-        content = MOCK_CONTENT_LABELS[digest[5] % len(MOCK_CONTENT_LABELS)]
+        style = _LABELS["style"][digest[0] % len(_LABELS["style"])]
+        color = _LABELS["color"][digest[1] % len(_LABELS["color"])]
+        scene = _LABELS["scene"][digest[2] % len(_LABELS["scene"])]
+        content = _LABELS["content"][digest[3] % len(_LABELS["content"])]
         objects = [
-            MOCK_OBJECT_LABELS[digest[3] % len(MOCK_OBJECT_LABELS)],
-            MOCK_OBJECT_LABELS[digest[4] % len(MOCK_OBJECT_LABELS)],
+            _LABELS["objects"][digest[4] % len(_LABELS["objects"])],
+            _LABELS["objects"][digest[5] % len(_LABELS["objects"])],
         ]
         objects = list(dict.fromkeys(objects))
         suggested_tags = list(dict.fromkeys([style, color, scene, content, *objects]))
@@ -236,11 +226,11 @@ class ClipService:
             image_features = image_features / image_features.norm(dim=-1, keepdim=True)
             embedding = image_features[0].detach().cpu().tolist()
 
-            style = self._top_label(image_features, STYLE_LABELS)
-            color = self._top_label(image_features, COLOR_LABELS)
-            scene = self._top_label(image_features, SCENE_LABELS)
-            content = self._top_label(image_features, CONTENT_LABELS)
-            objects = self._top_labels(image_features, OBJECT_LABELS, top_k=5)
+            style = self._top_label(image_features, _LABELS["style"])
+            color = self._top_label(image_features, _LABELS["color"])
+            scene = self._top_label(image_features, _LABELS["scene"])
+            content = self._top_label(image_features, _LABELS["content"])
+            objects = self._top_labels(image_features, _LABELS["objects"], top_k=5)
             suggested_tags = list(dict.fromkeys([style, color, scene, content, *objects]))
             return ClipAnalysisResult(
                 provider="chinese_clip",
@@ -278,7 +268,8 @@ class ClipService:
         if torch is None or model is None or processor is None:
             raise ApiError(status_code=503, code="CLIP_MODEL_UNAVAILABLE", message="CLIP internals are not ready.")
 
-        text_inputs = processor(text=labels, return_tensors="pt", padding=True, truncation=True)
+        prompts = [f"一张{label}的图片" for label in labels]
+        text_inputs = processor(text=prompts, return_tensors="pt", padding=True, truncation=True)
         text_inputs = {
             key: value.to(self._device) if hasattr(value, "to") else value
             for key, value in text_inputs.items()
