@@ -2,7 +2,7 @@
 
 基于 **Chinese-CLIP** 的企业素材库系统（轻量 MVP）项目骨架。
 
-当前状态：已完成后端 P0 对接接口（认证、素材、版本、标签、分组、分享、审计）并接入 CLIP 图像分析链路；P1 剩余项为文本检索。
+当前状态：后端对接端点已完成（认证、素材、版本、标签、分组、分享、审计、CLIP 分析、文本检索），当前主要工作为前端从 mock 切换到真实 API。
 
 ## 目录结构
 
@@ -29,6 +29,7 @@ scripts/                # 脚本目录
 - `docs/plans/PLAN-20260507-assets-crud-m2.md`
 - `docs/plans/PLAN-20260507-p0-api-completion.md`
 - `docs/plans/PLAN-20260508-clip-upload-integration.md`
+- `docs/plans/PLAN-20260508-search-text-p1.md`
 
 ## 规划中的轻量技术栈
 
@@ -153,6 +154,11 @@ Invoke-RestMethod -Method Get `
 
 - `GET /api/v1/clip/status`：查看模型服务状态（enabled/provider/ready/last_error）
 - `POST /api/v1/clip/analyze`：上传图片执行 CLIP 分析（需登录，admin/editor）
+
+## 语义检索接口（已实现）
+
+- `POST /api/v1/search/text`：文本搜图，请求 `{ query, page, page_size }`
+- 响应：`{ items: [{ asset, score }], total, page, page_size }`
 
 可配置环境变量：
 

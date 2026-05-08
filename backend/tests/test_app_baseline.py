@@ -392,3 +392,48 @@ def test_clip_status_and_manual_analyze() -> None:
     assert data["embedding_dim"] == 32
     assert len(data["suggested_tags"]) >= 1
 
+
+def test_search_text_semantic_pagination() -> None:
+    _reset_users_table()
+    token = _register_and_login(f"admin_{uuid4().hex[:8]}")
+
+    first_upload = client.post(
+        "/api/v1/assets/upload",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("search_a.png", b"SEARCH_A", "image/png")},
+        data={"name": "search-a"},
+    )
+    assert first_upload.status_code == 200
+
+    second_upload = client.post(
+        "/api/v1/assets/upload",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("search_b.png", b"SEARCH_B", "image/png")},
+        data={"name": "search-b"},
+    )
+    assert second_upload.status_code == 200
+
+    search_response = client.post(
+        "/api/v1/search/text",
+        json={"query": "企业宣传海报", "page": 1, "page_size": 2},
+    )
+    assert search_response.status_code == 200
+    payload = search_response.json()
+    assert payload["total"] == 2
+    assert payload["page"] == 1
+    assert payload["page_size"] == 2
+    assert len(payload["items"]) == 2
+    assert payload["items"][0]["score"] >= payload["items"][1]["score"]
+    assert payload["items"][0]["asset"]["clip_analysis"]["status"] == "ready"
+
+    second_page = client.post(
+        "/api/v1/search/text",
+        json={"query": "企业宣传海报", "page": 2, "page_size": 1},
+    )
+    assert second_page.status_code == 200
+    second_page_payload = second_page.json()
+    assert second_page_payload["total"] == 2
+    assert second_page_payload["page"] == 2
+    assert second_page_payload["page_size"] == 1
+    assert len(second_page_payload["items"]) == 1
+

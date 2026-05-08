@@ -119,13 +119,7 @@ class ClipService:
         }
 
     def analyze_file(self, image_path: str | Path) -> ClipAnalysisResult:
-        if not settings.clip_enabled:
-            raise ApiError(status_code=503, code="CLIP_DISABLED", message="CLIP service is disabled.")
-        if not self._initialized:
-            raise ApiError(status_code=503, code="CLIP_NOT_INITIALIZED", message="CLIP service is not initialized.")
-        if not self._ready:
-            reason = self._last_error or "CLIP model is not ready."
-            raise ApiError(status_code=503, code="CLIP_MODEL_UNAVAILABLE", message=reason)
+        self._ensure_ready()
 
         path = Path(image_path)
         if not path.exists():
@@ -135,9 +129,28 @@ class ClipService:
             return self._analyze_mock(path)
         return self._analyze_chinese_clip(path)
 
+    def encode_text(self, text: str) -> list[float]:
+        self._ensure_ready()
+        cleaned = text.strip()
+        if not cleaned:
+            raise ApiError(status_code=400, code="EMPTY_QUERY", message="Query cannot be empty.")
+
+        if self._provider == "mock":
+            return self._encode_text_mock(cleaned)
+        return self._encode_text_chinese_clip(cleaned)
+
+    def _ensure_ready(self) -> None:
+        if not settings.clip_enabled:
+            raise ApiError(status_code=503, code="CLIP_DISABLED", message="CLIP service is disabled.")
+        if not self._initialized:
+            raise ApiError(status_code=503, code="CLIP_NOT_INITIALIZED", message="CLIP service is not initialized.")
+        if not self._ready:
+            reason = self._last_error or "CLIP model is not ready."
+            raise ApiError(status_code=503, code="CLIP_MODEL_UNAVAILABLE", message=reason)
+
     def _analyze_mock(self, image_path: Path) -> ClipAnalysisResult:
         digest = sha256(image_path.read_bytes()).digest()
-        embedding = [round((byte - 127.5) / 127.5, 6) for byte in digest]
+        embedding = self._digest_to_embedding(digest)
         style = MOCK_STYLE_LABELS[digest[0] % len(MOCK_STYLE_LABELS)]
         color = MOCK_COLOR_LABELS[digest[1] % len(MOCK_COLOR_LABELS)]
         scene = MOCK_SCENE_LABELS[digest[2] % len(MOCK_SCENE_LABELS)]
@@ -155,6 +168,10 @@ class ClipService:
             suggested_description=f"{style}，{scene}，{color}，主体包含：{'、'.join(objects)}",
             suggested_tags=suggested_tags,
         )
+
+    def _encode_text_mock(self, text: str) -> list[float]:
+        digest = sha256(text.encode("utf-8")).digest()
+        return self._digest_to_embedding(digest)
 
     def _analyze_chinese_clip(self, image_path: Path) -> ClipAnalysisResult:
         torch = self._torch
@@ -226,6 +243,34 @@ class ClipService:
             text_features = model.get_text_features(**text_inputs)
         text_features = text_features / text_features.norm(dim=-1, keepdim=True)
         return (image_features @ text_features.T)[0]
+
+    def _encode_text_chinese_clip(self, text: str) -> list[float]:
+        torch = self._torch
+        model = self._model
+        processor = self._processor
+        if torch is None or model is None or processor is None:
+            raise ApiError(status_code=503, code="CLIP_MODEL_UNAVAILABLE", message="CLIP internals are not ready.")
+
+        try:
+            text_inputs = processor(text=[text], return_tensors="pt", padding=True, truncation=True)
+            text_inputs = {
+                key: value.to(self._device) if hasattr(value, "to") else value
+                for key, value in text_inputs.items()
+            }
+            with torch.no_grad():
+                text_features = model.get_text_features(**text_inputs)
+            text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+            return text_features[0].detach().cpu().tolist()
+        except (RuntimeError, ValueError, OSError) as exc:
+            raise ApiError(
+                status_code=500,
+                code="CLIP_TEXT_ENCODE_FAILED",
+                message=f"CLIP text encode failed: {exc}",
+            ) from exc
+
+    @staticmethod
+    def _digest_to_embedding(digest: bytes) -> list[float]:
+        return [round((byte - 127.5) / 127.5, 6) for byte in digest]
 
 
 clip_service = ClipService()

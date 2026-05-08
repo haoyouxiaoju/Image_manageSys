@@ -77,3 +77,29 @@ def get_clip_analysis(asset_id: int) -> dict | None:
         json.loads(payload.pop("suggested_tags_json")) if payload["suggested_tags_json"] else None
     )
     return payload
+
+
+def list_ready_embeddings_assets() -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                a.id, a.name, a.description, a.source, a.file_name, a.file_path, a.file_size, a.mime_type,
+                a.uploaded_by, a.created_at, a.updated_at,
+                c.status, c.model_name, c.model_version, c.embedding_json, c.embedding_dim,
+                c.features_json, c.suggested_description, c.suggested_tags_json, c.error_message, c.analyzed_at
+            FROM asset_clip_analysis c
+            JOIN assets a ON a.id = c.asset_id
+            WHERE c.status = 'ready' AND c.embedding_json IS NOT NULL
+            ORDER BY a.id DESC
+            """
+        ).fetchall()
+
+    result: list[dict] = []
+    for row in rows:
+        item = dict(row)
+        item["embedding"] = json.loads(item.pop("embedding_json"))
+        item["features"] = json.loads(item.pop("features_json")) if item["features_json"] else None
+        item["suggested_tags"] = json.loads(item.pop("suggested_tags_json")) if item["suggested_tags_json"] else None
+        result.append(item)
+    return result
