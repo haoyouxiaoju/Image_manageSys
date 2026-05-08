@@ -8,14 +8,17 @@ from app.core.database import init_database
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import register_middleware
+from app.services.clip_service import clip_service
 
 configure_logging()
 init_database()
+clip_service.initialize()
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_database()
+    clip_service.initialize()
     yield
 
 

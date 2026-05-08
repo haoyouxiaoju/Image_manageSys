@@ -143,5 +143,24 @@ def init_database() -> None:
             )
             """
         )
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS asset_clip_analysis (
+                asset_id INTEGER PRIMARY KEY,
+                status TEXT NOT NULL,
+                model_name TEXT,
+                model_version TEXT,
+                embedding_json TEXT,
+                embedding_dim INTEGER,
+                features_json TEXT,
+                suggested_description TEXT,
+                suggested_tags_json TEXT,
+                error_message TEXT,
+                analyzed_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE
+            )
+            """
+        )
         conn.commit()
 

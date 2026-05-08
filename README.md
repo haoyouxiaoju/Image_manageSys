@@ -2,7 +2,7 @@
 
 基于 **Chinese-CLIP** 的企业素材库系统（轻量 MVP）项目骨架。
 
-当前状态：已完成后端 P0 对接接口（认证、素材、版本、标签、分组、分享、审计）；P1 待实现项为文本检索与 CLIP 分析。
+当前状态：已完成后端 P0 对接接口（认证、素材、版本、标签、分组、分享、审计）并接入 CLIP 图像分析链路；P1 剩余项为文本检索。
 
 ## 目录结构
 
@@ -28,6 +28,7 @@ scripts/                # 脚本目录
 - `docs/plans/PLAN-20260507-rbac-m1.md`
 - `docs/plans/PLAN-20260507-assets-crud-m2.md`
 - `docs/plans/PLAN-20260507-p0-api-completion.md`
+- `docs/plans/PLAN-20260508-clip-upload-integration.md`
 
 ## 规划中的轻量技术栈
 
@@ -48,6 +49,7 @@ Set-Location D:\myfiles\code\c\CLIP-Image_manageSys\backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements-dev.txt
+python -m pip install -r requirements-clip.txt
 $env:PYTHONPATH = "."
 ```
 
@@ -131,6 +133,7 @@ Invoke-RestMethod -Method Get `
 - `POST /api/v1/assets/upload`（需登录，admin/editor）
   - 支持：`JPG/PNG/WebP`
   - 大小限制：`<=20MB`
+  - 上传后自动执行 CLIP 分析（失败时在响应 `clip_analysis` 返回失败原因）
 - `GET /api/v1/assets?page=1&page_size=10&query=...`（访客可读）
 - `GET /api/v1/assets/{id}`（访客可读）
 - `PUT /api/v1/assets/{id}`（admin 可改全部，editor 仅可改自己上传）
@@ -145,4 +148,18 @@ Invoke-RestMethod -Method Get `
 - 分组：`GET/POST /api/v1/collections`、`GET/PUT/DELETE /api/v1/collections/{id}`、`POST /api/v1/collections/{id}/assets`、`DELETE /api/v1/collections/{id}/assets/{asset_id}`
 - 分享：`GET/POST/DELETE /api/v1/share-links`
 - 审计：`GET /api/v1/audit-logs`（admin）
+
+## CLIP 分析接口（已实现）
+
+- `GET /api/v1/clip/status`：查看模型服务状态（enabled/provider/ready/last_error）
+- `POST /api/v1/clip/analyze`：上传图片执行 CLIP 分析（需登录，admin/editor）
+
+可配置环境变量：
+
+- `CLIP_ENABLED`：是否启用 CLIP（默认 `true`）
+- `CLIP_PROVIDER`：`chinese_clip` 或 `mock`（默认 `chinese_clip`）
+- `CLIP_MODEL_NAME`：默认 `OFA-Sys/chinese-clip-vit-base-patch16`
+- `CLIP_MODEL_REVISION`：默认 `main`
+- `CLIP_DEVICE`：默认 `cpu`
+- `CLIP_REQUIRED_ON_UPLOAD`：上传时是否强制 CLIP 成功（默认 `false`）
 

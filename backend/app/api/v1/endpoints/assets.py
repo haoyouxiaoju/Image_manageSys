@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, File, Form, Query, Request, UploadFile
@@ -9,7 +10,8 @@ from pydantic import BaseModel, Field
 from app.core.auth_context import get_current_user
 from app.core.config import settings
 from app.core.exceptions import ApiError
-from app.repositories import asset_repository, audit_repository
+from app.repositories import asset_repository, audit_repository, clip_repository
+from app.services.clip_service import clip_service
 
 router = APIRouter()
 
@@ -30,6 +32,19 @@ class AssetVersionResponse(BaseModel):
     created_at: str
 
 
+class ClipAnalysisResponse(BaseModel):
+    status: str
+    model_name: str | None = None
+    model_version: str | None = None
+    embedding_dim: int | None = None
+    embedding: list[float] | None = None
+    features: dict[str, Any] | None = None
+    suggested_description: str | None = None
+    suggested_tags: list[str] | None = None
+    error_message: str | None = None
+    analyzed_at: str | None = None
+
+
 class AssetResponse(BaseModel):
     id: int
     name: str
@@ -44,6 +59,7 @@ class AssetResponse(BaseModel):
     created_at: str
     updated_at: str
     download_url: str
+    clip_analysis: ClipAnalysisResponse | None = None
 
 
 class AssetListResponse(BaseModel):
@@ -60,7 +76,25 @@ class AssetUpdateRequest(BaseModel):
     tags: list[str] | None = None
 
 
-def _to_asset_response(asset: dict) -> AssetResponse:
+def _to_clip_analysis_response(data: dict | None, include_embedding: bool) -> ClipAnalysisResponse | None:
+    if data is None:
+        return None
+    embedding = data["embedding"] if include_embedding else None
+    return ClipAnalysisResponse(
+        status=data["status"],
+        model_name=data["model_name"],
+        model_version=data["model_version"],
+        embedding_dim=data["embedding_dim"],
+        embedding=embedding,
+        features=data["features"],
+        suggested_description=data["suggested_description"],
+        suggested_tags=data["suggested_tags"],
+        error_message=data["error_message"],
+        analyzed_at=data["analyzed_at"],
+    )
+
+
+def _to_asset_response(asset: dict, include_clip_embedding: bool = False) -> AssetResponse:
     tags = asset_repository.list_asset_tag_names(asset["id"])
     versions = [
         AssetVersionResponse(
@@ -76,6 +110,7 @@ def _to_asset_response(asset: dict) -> AssetResponse:
         )
         for item in asset_repository.list_asset_versions(asset["id"])
     ]
+    clip_analysis = clip_repository.get_clip_analysis(asset["id"])
     return AssetResponse(
         id=asset["id"],
         name=asset["name"],
@@ -90,6 +125,7 @@ def _to_asset_response(asset: dict) -> AssetResponse:
         created_at=asset["created_at"],
         updated_at=asset["updated_at"],
         download_url=f"/api/v1/assets/{asset['id']}/download",
+        clip_analysis=_to_clip_analysis_response(clip_analysis, include_embedding=include_clip_embedding),
     )
 
 
@@ -125,6 +161,35 @@ def _parse_tags(tags_raw: str | None) -> list[str]:
     except json.JSONDecodeError:
         pass
     return [item.strip() for item in tags_raw.split(",") if item.strip()]
+
+
+def _persist_clip_analysis_success(asset_id: int, analysis: Any) -> None:
+    clip_repository.upsert_clip_analysis(
+        asset_id=asset_id,
+        status="ready",
+        model_name=analysis.model_name,
+        model_version=analysis.model_version,
+        embedding=analysis.embedding,
+        features=analysis.features,
+        suggested_description=analysis.suggested_description,
+        suggested_tags=analysis.suggested_tags,
+        error_message=None,
+    )
+
+
+def _persist_clip_analysis_failure(asset_id: int, message: str) -> None:
+    clip_status = clip_service.status()
+    clip_repository.upsert_clip_analysis(
+        asset_id=asset_id,
+        status="failed",
+        model_name=clip_status["model_name"],
+        model_version=clip_status["model_version"],
+        embedding=None,
+        features=None,
+        suggested_description=None,
+        suggested_tags=None,
+        error_message=message,
+    )
 
 
 @router.post("/upload", response_model=AssetResponse)
@@ -174,6 +239,17 @@ async def upload_asset(
     if parsed_tags:
         asset_repository.replace_asset_tags(created_asset["id"], parsed_tags)
 
+    try:
+        clip_result = clip_service.analyze_file(stored_file_path)
+        _persist_clip_analysis_success(created_asset["id"], clip_result)
+    except ApiError as exc:
+        _persist_clip_analysis_failure(created_asset["id"], exc.message)
+        if settings.clip_required_on_upload:
+            asset_repository.delete_asset(created_asset["id"])
+            if stored_file_path.exists():
+                stored_file_path.unlink()
+            raise
+
     audit_repository.create_audit_log(
         user=user["username"],
         action="上传",
@@ -205,7 +281,7 @@ async def list_assets(
         total=result["total"],
         page=page,
         page_size=page_size,
-        items=[_to_asset_response(item) for item in result["items"]],
+        items=[_to_asset_response(item, include_clip_embedding=False) for item in result["items"]],
     )
 
 
@@ -214,7 +290,7 @@ async def get_asset(asset_id: int) -> AssetResponse:
     asset = asset_repository.get_asset_by_id(asset_id)
     if asset is None:
         raise ApiError(status_code=404, code="ASSET_NOT_FOUND", message="Asset does not exist.")
-    return _to_asset_response(asset)
+    return _to_asset_response(asset, include_clip_embedding=False)
 
 
 @router.put("/{asset_id}", response_model=AssetResponse)
@@ -242,7 +318,7 @@ async def update_asset(asset_id: int, payload: AssetUpdateRequest, request: Requ
         target=updated_asset["name"],
         ip_address=_client_ip(request),
     )
-    return _to_asset_response(updated_asset)
+    return _to_asset_response(updated_asset, include_clip_embedding=False)
 
 
 @router.delete("/{asset_id}")
