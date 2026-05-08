@@ -65,15 +65,28 @@ function copyShareLink() {
 }
 
 // Q4.1: 下载走后端 API
-function downloadAsset() {
+async function downloadAsset() {
   if (!asset.value) return
-  ElMessage.info(`模拟下载：GET /api/v1/assets/${asset.value.id}/download → 文件流 + 审计日志`)
-  // 真实实现：
-  // const resp = await fetch(`/api/v1/assets/${asset.value.id}/download`, { headers: { Authorization: `Bearer ${auth.token}` } })
-  // const blob = await resp.blob()
-  // const url = URL.createObjectURL(blob)
-  // const a = document.createElement('a'); a.href = url; a.download = asset.value.name; a.click()
-  // URL.revokeObjectURL(url)
+  try {
+    const resp = await fetch(`/api/v1/assets/${asset.value.id}/download`, {
+      headers: { Authorization: `Bearer ${auth.token}` },
+    })
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }))
+      throw new Error(err.detail || `HTTP ${resp.status}`)
+    }
+    const blob = await resp.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${asset.value.name}.${asset.value.format?.toLowerCase() || 'jpg'}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } catch (e: any) {
+    ElMessage.error('下载失败：' + (e?.message || '未知错误'))
+  }
 }
 
 // Q5.2: editor 只能删自己的，admin 可以删全部

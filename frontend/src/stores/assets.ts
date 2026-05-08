@@ -1,13 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { ElMessage } from 'element-plus'
 import { assetsApi, type BackendAsset } from '@/api/assets'
+import { searchApi } from '@/api/search'
 import type { Asset, AssetVersion, Collection, SearchResult } from '@/types'
-
-// ===== 确定性哈希 =====
-function hashStr(s: string): number {
-  let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h) + s.charCodeAt(i)
-  return Math.abs(h)
-}
 
 // ===== 后端数据 → 前端 Asset 映射 =====
 function mapAsset(b: BackendAsset): Asset {
@@ -39,21 +35,6 @@ const mockCollections: Collection[] = [
   { id:5, name:'宠物摄影',            desc:'猫狗宠物相关摄影素材',                        assetIds:[17,18],                    created:'2026-05-01', creator:'小明' },
   { id:6, name:'风光与建筑摄影',     desc:'自然风光和城市建筑摄影合集',                  assetIds:[8,11,14],                  created:'2026-02-15', creator:'小明' },
 ]
-
-// ===== 语义搜索表（后端搜索端点未就绪，暂留本地模拟） =====
-const semanticKeywords: Record<string, string[]> = {
-  '蓝色':['科技','背景','深蓝','冷色调','渐变'], '科技':['蓝色','背景','粒子','仪表','数据','深色'],
-  '咖啡':['拿铁','热饮','拉花','杯子','饮品','棕色'], '猫':['猫咪','橘猫','宠物','窗台','虎斑','动物'],
-  '狗':['犬','金毛','宠物','奔跑','草地','户外'], '跑车':['红色','展厅','轿车','运动','汽车'],
-  '海报':['促销','设计','广告','视觉','平面'], '风景':['自然','户外','山水','摄影','蓝天'],
-  '汉堡':['薯条','快餐','食物','套餐','牛肉'], '建筑':['城市','大楼','古典','外景'],
-}
-
-const reasonMap: Record<string, string> = {
-  '蓝色':'色调匹配','科技':'风格匹配','咖啡':'物体识别：咖啡','猫':'物体识别：猫',
-  '狗':'物体识别：狗','金毛':'物体识别：金毛犬','汉堡':'物体识别：汉堡','跑车':'物体识别：跑车',
-  '海报':'类型匹配','风景':'场景匹配','建筑':'场景匹配','年会':'场景匹配',
-}
 
 // ===== Store =====
 export const useAssetStore = defineStore('assets', () => {
@@ -240,33 +221,24 @@ export const useAssetStore = defineStore('assets', () => {
     collections.value = collections.value.filter(c => c.id !== id)
   }
 
-  // 本地语义搜索（后端搜索端点未就绪）
-  function doSearch(query: string) {
+  // 真实语义搜索（调用 POST /api/v1/search/text）
+  async function doSearch(query: string) {
     if (!query.trim()) return
     searchQuery.value = query
     searching.value = true
-    setTimeout(() => {
-      const q = query
-      let expandedTerms = [q]
-      for (const [kw, terms] of Object.entries(semanticKeywords)) {
-        if (q.includes(kw)) expandedTerms.push(...terms)
-      }
-      const results: SearchResult[] = allAssets.value.map(a => {
-        const st = (a.name + a.desc + (a.clipDesc || '')).toLowerCase()
-        let matchScore = 0
-        const reasons: string[] = []
-        expandedTerms.forEach(t => {
-          if (st.includes(t.toLowerCase())) { matchScore += 25; reasons.push(t) }
-        })
-        if (a.name.toLowerCase().includes(q.toLowerCase())) matchScore += 20
-        const matchedReasons = [...new Set(reasons)].slice(0, 3).map(r => reasonMap[r] || r).filter(Boolean)
-        const offset = hashStr(q + '_' + a.id) % 10
-        const score = Math.min(99, Math.max(40, 50 + matchScore + offset))
-        return { ...a, score, matchReasons: matchedReasons.length > 0 ? matchedReasons : ['语义关联'] }
-      }).filter(r => r.score > 50).sort((a, b) => b.score - a.score)
-      searchResults.value = results
+    try {
+      const res = await searchApi.searchText({ query, page: 1, page_size: 50 })
+      searchResults.value = res.data.items.map(item => ({
+        ...mapAsset(item.asset),
+        score: Math.round(item.score * 100),
+        matchReasons: [`余弦相似度 ${(item.score * 100).toFixed(1)}%`],
+      }))
+    } catch (e: any) {
+      ElMessage.error('搜索失败：' + (e?.response?.data?.detail || e?.message || '未知错误'))
+      searchResults.value = []
+    } finally {
       searching.value = false
-    }, 400)
+    }
   }
 
   return {
