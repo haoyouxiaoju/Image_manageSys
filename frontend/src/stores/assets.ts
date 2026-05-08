@@ -22,9 +22,9 @@ function mapAsset(b: BackendAsset): Asset {
     date: b.created_at?.substring(0, 10) || '',
     size: sizeMB >= 1 ? sizeMB.toFixed(1) + ' MB' : (b.file_size / 1024).toFixed(0) + ' KB',
     format: ext,
-    thumb: `https://picsum.photos/seed/asset${b.id}/400/300`,
-    tags: [], // 后端标签端点未就绪，暂空
-    versions: [], // 后端版本端点未就绪，暂空
+    thumb: (b as any).file_url || b.download_url,
+    tags: b.tags || [],
+    versions: b.versions || [],
     downloadUrl: b.download_url,
   }
 }

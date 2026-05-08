@@ -12,7 +12,10 @@ export interface BackendAsset {
   uploaded_by: string
   created_at: string
   updated_at: string
+  file_url: string
   download_url: string
+  tags?: string[]
+  versions?: any[]
 }
 
 export interface BackendAssetList {
