@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useAssetStore } from '@/stores/assets'
 import { ElMessage } from 'element-plus'
+import { clipApi } from '@/api/clip'
 
 const auth = useAuthStore()
 const store = useAssetStore()
@@ -24,8 +25,10 @@ const formSource = ref('')
 // ---- CLIP 分析 ----
 const analyzing = ref(false)
 const clipResult = ref<{
-  style: string; color: string; density: string; light: string
-  desc: string; tags: string[]
+  model: string
+  features: { style?: string; color_tone?: string; scene?: string; objects?: string[] }
+  suggested_description: string
+  suggested_tags: string[]
 } | null>(null)
 
 // ---- 上传 ----
@@ -61,47 +64,38 @@ function removeFile(idx: number) {
 
 const hasFiles = computed(() => uploadFiles.value.length > 0)
 
-// ===== 步骤 2：模拟 CLIP 分析 =====
-function hashStr(s: string): number {
-  let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h) + s.charCodeAt(i)
-  return Math.abs(h)
-}
-
-function runCLIPAnalysis() {
+// ===== 步骤 2：CLIP AI 分析 =====
+async function runCLIPAnalysis() {
   if (!hasFiles.value) return
   analyzing.value = true
   currentStep.value = 'analyze'
 
-  // 模拟 CLIP 编码延迟（真实 CLIP 约 0.5-2s）
-  setTimeout(() => {
-    const nameHash = hashStr(uploadFiles.value[0]?.name || 'unknown')
-    const styles = ['商业摄影','UI设计稿','平面海报','风光摄影','建筑摄影','室内摄影','美食摄影','宠物摄影','航拍摄影','数字合成']
-    const colors = ['蓝色/冷色调','暖黄/橙色','白色/中性色','红色/金色','深色/暗色调','绿色/自然色']
-    const densities = ['简洁','适中','丰富']
-    const lights = ['自然光','室内灯光','混合光','平光']
-    const tags = ['科技','蓝色','背景','产品','人物','风景','建筑','设计','摄影','室内','户外','简约','现代','商务']
+  try {
+    const fd = new FormData()
+    fd.append('file', uploadFiles.value[0].file)
 
-    const s = styles[nameHash % styles.length]
-    const c = colors[(nameHash >> 4) % colors.length]
-    const d = densities[(nameHash >> 6) % densities.length]
-    const l = lights[(nameHash >> 8) % lights.length]
-    const ti = nameHash % tags.length
-    const suggestedTags = [tags[ti], tags[(ti + 3) % tags.length], tags[(ti + 7) % tags.length]]
+    const res = await clipApi.analyze(fd)
+    const data = res.data
 
     clipResult.value = {
-      style: s, color: c, density: d, light: l,
-      desc: `${s}图片，整体呈${c}，画面${d}`,
-      tags: suggestedTags,
+      model: data.model,
+      features: data.features,
+      suggested_description: data.suggested_description,
+      suggested_tags: data.suggested_tags,
     }
 
-    // ★ 自动填充表单
-    formDesc.value = clipResult.value.desc
-    formTags.value = [...suggestedTags]
+    // 自动填充表单
+    formDesc.value = data.suggested_description
+    formTags.value = [...data.suggested_tags]
     formSource.value = formSource.value || ''
 
-    analyzing.value = false
     currentStep.value = 'upload'
-  }, 1200)
+  } catch (e: any) {
+    ElMessage.error('CLIP 分析失败：' + (e?.response?.data?.detail || e?.message || '未知错误'))
+    currentStep.value = 'select'
+  } finally {
+    analyzing.value = false
+  }
 }
 
 // ===== 步骤 3：确认并上传 =====
@@ -226,7 +220,7 @@ const stepStatus = computed(() => ({
     <div class="panel-title"><el-icon><Cpu /></el-icon>CLIP 正在分析中...</div>
     <div style="display:flex;align-items:center;gap:12px;padding:12px 0">
       <el-progress :percentage="100" :indeterminate="true" :stroke-width="4" style="flex:1" />
-      <span style="font-size:12px;color:#909399;white-space:nowrap">模拟编码中（真实 CLIP 接入后替换）</span>
+      <span style="font-size:12px;color:#909399;white-space:nowrap">正在调用 Chinese-CLIP 编码...</span>
     </div>
   </div>
 
@@ -236,28 +230,25 @@ const stepStatus = computed(() => ({
     <div class="clip-panel">
       <div class="panel-title">
         <el-icon><Cpu /></el-icon>CLIP AI 分析结果
-        <el-tag size="small" type="warning" style="margin-left:8px">模拟</el-tag>
+        <el-tag size="small" type="success" style="margin-left:8px">{{ clipResult.model }}</el-tag>
       </div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">
         <div style="background:#fff;border-radius:6px;padding:10px 14px;text-align:center">
           <div style="font-size:11px;color:#909399">视觉风格</div>
-          <div style="font-size:14px;font-weight:600;color:#303133;margin-top:2px">{{ clipResult.style }}</div>
+          <div style="font-size:14px;font-weight:600;color:#303133;margin-top:2px">{{ clipResult.features.style || '-' }}</div>
         </div>
         <div style="background:#fff;border-radius:6px;padding:10px 14px;text-align:center">
-          <div style="font-size:11px;color:#909399">主色调</div>
-          <div style="font-size:14px;font-weight:600;color:#303133;margin-top:2px">{{ clipResult.color }}</div>
+          <div style="font-size:11px;color:#909399">色调</div>
+          <div style="font-size:14px;font-weight:600;color:#303133;margin-top:2px">{{ clipResult.features.color_tone || '-' }}</div>
         </div>
         <div style="background:#fff;border-radius:6px;padding:10px 14px;text-align:center">
-          <div style="font-size:11px;color:#909399">内容密度</div>
-          <div style="font-size:14px;font-weight:600;color:#303133;margin-top:2px">{{ clipResult.density }}</div>
+          <div style="font-size:11px;color:#909399">场景</div>
+          <div style="font-size:14px;font-weight:600;color:#303133;margin-top:2px">{{ clipResult.features.scene || '-' }}</div>
         </div>
         <div style="background:#fff;border-radius:6px;padding:10px 14px;text-align:center">
-          <div style="font-size:11px;color:#909399">光线条件</div>
-          <div style="font-size:14px;font-weight:600;color:#303133;margin-top:2px">{{ clipResult.light }}</div>
+          <div style="font-size:11px;color:#909399">物体</div>
+          <div style="font-size:14px;font-weight:600;color:#303133;margin-top:2px">{{ (clipResult.features.objects || []).join('、') || '-' }}</div>
         </div>
-      </div>
-      <div style="font-size:12px;color:#c0c4cc;text-align:center">
-        ⚡ CLIP 分析目前为前端模拟。真实 Chinese-CLIP 接入后，将返回 512 维语义向量用于搜索。
       </div>
     </div>
 
