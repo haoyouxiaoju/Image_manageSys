@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.core.exceptions import ApiError
 from app.repositories import asset_repository, audit_repository, clip_repository
 from app.services.clip_service import clip_service
+from app.services.vector_search_service import vector_search_service
 
 router = APIRouter()
 
@@ -40,6 +41,7 @@ class ClipAnalysisResponse(BaseModel):
     embedding_dim: int | None = None
     embedding: list[float] | None = None
     features: dict[str, Any] | None = None
+    prompt: str | None = None
     summary: str | None = None
     keywords: list[str] | None = None
     suggested_description: str | None = None
@@ -92,6 +94,7 @@ def _to_clip_analysis_response(data: dict | None, include_embedding: bool) -> Cl
         embedding_dim=data["embedding_dim"],
         embedding=embedding,
         features=data["features"],
+        prompt=data["generated_prompt"],
         summary=data["suggested_description"],
         keywords=data["suggested_tags"],
         suggested_description=data["suggested_description"],
@@ -180,9 +183,16 @@ def _persist_clip_analysis_success(asset_id: int, analysis: Any) -> None:
         model_version=analysis.model_version,
         embedding=analysis.embedding,
         features=analysis.features,
+        generated_prompt=analysis.generated_prompt,
         suggested_description=analysis.suggested_description,
         suggested_tags=analysis.suggested_tags,
         error_message=None,
+    )
+    vector_search_service.index_asset_prompt(
+        asset_id=asset_id,
+        prompt=analysis.generated_prompt,
+        summary=analysis.suggested_description,
+        keywords=analysis.suggested_tags,
     )
 
 
@@ -196,6 +206,7 @@ def _persist_clip_analysis_failure(asset_id: int, message: str) -> None:
         model_version=clip_status["model_version"],
         embedding=None,
         features=None,
+        generated_prompt=None,
         suggested_description=None,
         suggested_tags=None,
         error_message=message,
@@ -343,6 +354,7 @@ async def delete_asset(asset_id: int, request: Request) -> dict[str, str]:
 
     if not asset_repository.delete_asset(asset_id):
         raise ApiError(status_code=500, code="DELETE_FAILED", message="Failed to delete asset.")
+    vector_search_service.delete_asset(asset_id)
 
     file_path = Path(asset["file_path"])
     if file_path.exists():

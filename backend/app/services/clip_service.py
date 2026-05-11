@@ -38,6 +38,7 @@ class ClipAnalysisResult:
     model_version: str
     embedding: list[float] | None
     features: dict[str, Any] | None
+    generated_prompt: str
     suggested_description: str
     suggested_tags: list[str]
 
@@ -116,12 +117,16 @@ class ClipService:
         ]
         deduped = list(dict.fromkeys(keywords))
         summary = f"图片主要内容涉及：{'、'.join(deduped)}。"
+        generated_prompt = (
+            f"{'、'.join(deduped)}，商业产品摄影，主体清晰，构图稳定，写实风格，适合企业素材库场景。"
+        )
         return ClipAnalysisResult(
             provider="mock",
             model_name="mock-vision",
             model_version="mock-v1",
             embedding=None,
             features={"strategy": "mock-keywords"},
+            generated_prompt=generated_prompt,
             suggested_description=summary,
             suggested_tags=deduped,
         )
@@ -131,12 +136,46 @@ class ClipService:
         image_b64 = _b64encode(image_path.read_bytes())
         data_uri = f"data:{mime_type};base64,{image_b64}"
 
-        prompt = (
-            "你是企业素材库的图片解析助手。请根据图片内容输出 JSON，字段固定为："
-            "{\"summary\":\"一句中文摘要\",\"keywords\":[\"关键词1\",\"关键词2\",...] }。"
-            "keywords 输出 5-12 个中文关键词，避免泛词，优先主体名词（如书籍、笔记本电脑、咖啡杯）。"
-            "只输出 JSON，不要输出其它内容。"
-        )
+        prompt = """
+# Role
+你是企业级数字资产库的元数据生成专家。你的任务是将输入的图片转化为结构化的 JSON 数据，用于图像检索和AI重绘。
+
+# Output Format
+ strictly output a valid JSON object. Do NOT include markdown code blocks (like ```json), explanations, or extra text.
+Format:
+{
+  "prompt": "string",
+  "summary": "string",
+  "keywords": ["string"]
+}
+
+# Field Definitions & Guidelines
+
+1. **prompt (中文提示词)**:
+   - 目标：能够被 Midjourney/Stable Diffusion 等工具高精度复现原图。
+   - 结构必须包含：[主体描述] + [环境/背景] + [构图/视角] + [光影/天气] + [艺术风格/渲染引擎] + [色调/氛围]。
+   - 要求：描述需具象化。例如，不要说“一个漂亮的女人”，要说“一位穿着白色丝绸衬衫的亚洲女性，黑色长发，自然妆容”。
+
+2. **summary (画面核心陈述)**:
+   - 定义：用简练、客观的语言概括图片的核心内容（谁/什么 + 在做什么/状态 + 在哪里）。
+   - 长度：限制在 20-40 字以内。
+   - 禁忌：禁止使用“这张图片展示了...”、“图中有...”等废话开头，直接描述画面。
+
+3. **keywords (标签列表)**:
+   - 数量：严格控制在 6-15 个之间。
+   - 类型：优先提取实体名词（如： MacBook Pro, 拿铁咖啡, 绿植）、具体风格（如： 极简主义, 赛博朋克）、具体动作或状态。
+   - 禁忌：严禁使用“高清”、“精美”、“高质量”、“图片”、“摄影”等无信息量的泛词。
+
+# Example Logic
+Input: [一张在阳光下办公桌上的笔记本电脑图片]
+Output:
+{
+  "prompt": "特写镜头，一台银色的MacBook Pro打开放置在浅色木纹办公桌上，屏幕显示着代码界面，旁边有一杯冒着热气的拿铁咖啡和一盆小型多肉植物。自然光从左侧窗户射入，形成柔和的高光和阴影，景深效果，背景虚化，现代简约办公风格，明亮清新的色调。",
+  "summary": "阳光下的木纹办公桌上放置着打开的笔记本电脑和咖啡。",
+  "keywords": ["笔记本电脑", "MacBook", "办公桌", "木纹", "拿铁咖啡", "多肉植物", "自然光", "特写", "办公场景", "简约风格", "代码界面", "窗边"]
+}
+"""
+
 
         payload = {
             "model": settings.clip_model_name,
@@ -176,6 +215,12 @@ class ClipService:
         if not keywords:
             raise ApiError(status_code=500, code="QWEN_EMPTY_KEYWORDS", message="Qwen returned empty keywords.")
 
+        generated_prompt = parsed.get("prompt", "").strip() if isinstance(parsed.get("prompt"), str) else ""
+        if not generated_prompt:
+            generated_prompt = (
+                f"{'、'.join(keywords[:8])}，商业摄影，主体清晰，构图完整，光线自然，写实风格。"
+            )
+
         summary = parsed.get("summary", "").strip() if isinstance(parsed.get("summary"), str) else ""
         if not summary:
             summary = f"图片包含：{'、'.join(keywords[:6])}。"
@@ -185,7 +230,8 @@ class ClipService:
             model_name=settings.clip_model_name,
             model_version=settings.clip_model_revision,
             embedding=None,
-            features={"strategy": "qwen-keywords"},
+            features={"strategy": "qwen-prompt-keywords"},
+            generated_prompt=generated_prompt,
             suggested_description=summary,
             suggested_tags=list(dict.fromkeys(keywords)),
         )

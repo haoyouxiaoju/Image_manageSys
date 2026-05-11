@@ -10,17 +10,43 @@ from app.core.database import init_database
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import register_middleware
+from app.repositories import clip_repository
 from app.services.clip_service import clip_service
+from app.services.vector_search_service import vector_search_service
 
 configure_logging()
 init_database()
 clip_service.initialize()
+vector_search_service.initialize()
+if vector_search_service.status()["ready"]:
+    for item in clip_repository.list_ready_embeddings_assets():
+        prompt = (item.get("generated_prompt") or item.get("suggested_description") or "").strip()
+        if not prompt:
+            continue
+        vector_search_service.index_asset_prompt(
+            asset_id=int(item["id"]),
+            prompt=prompt,
+            summary=item.get("suggested_description"),
+            keywords=item.get("suggested_tags") or [],
+        )
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_database()
     clip_service.initialize()
+    vector_search_service.initialize()
+    if vector_search_service.status()["ready"]:
+        for item in clip_repository.list_ready_embeddings_assets():
+            prompt = (item.get("generated_prompt") or item.get("suggested_description") or "").strip()
+            if not prompt:
+                continue
+            vector_search_service.index_asset_prompt(
+                asset_id=int(item["id"]),
+                prompt=prompt,
+                summary=item.get("suggested_description"),
+                keywords=item.get("suggested_tags") or [],
+            )
     yield
 
 

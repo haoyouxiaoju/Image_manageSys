@@ -18,6 +18,7 @@ class ClipAnalyzeResponse(BaseModel):
     provider: str
     model: str
     model_version: str
+    prompt: str
     summary: str
     keywords: list[str]
 
@@ -54,6 +55,7 @@ async def clip_analyze(request: Request, file: UploadFile = File(...)) -> ClipAn
         provider=result.provider,
         model=result.model_name,
         model_version=result.model_version,
+        prompt=result.generated_prompt,
         summary=result.suggested_description,
         keywords=result.suggested_tags,
     )

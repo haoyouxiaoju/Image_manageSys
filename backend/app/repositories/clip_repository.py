@@ -12,6 +12,7 @@ def upsert_clip_analysis(
     model_version: str | None,
     embedding: list[float] | None,
     features: dict[str, Any] | None,
+    generated_prompt: str | None,
     suggested_description: str | None,
     suggested_tags: list[str] | None,
     error_message: str | None,
@@ -26,9 +27,9 @@ def upsert_clip_analysis(
             """
             INSERT INTO asset_clip_analysis (
                 asset_id, status, provider, model_name, model_version, embedding_json, embedding_dim, features_json,
-                suggested_description, suggested_tags_json, error_message, analyzed_at
+                generated_prompt, suggested_description, suggested_tags_json, error_message, analyzed_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
             ON CONFLICT(asset_id) DO UPDATE SET
                 status = excluded.status,
                 provider = excluded.provider,
@@ -37,6 +38,7 @@ def upsert_clip_analysis(
                 embedding_json = excluded.embedding_json,
                 embedding_dim = excluded.embedding_dim,
                 features_json = excluded.features_json,
+                generated_prompt = excluded.generated_prompt,
                 suggested_description = excluded.suggested_description,
                 suggested_tags_json = excluded.suggested_tags_json,
                 error_message = excluded.error_message,
@@ -51,6 +53,7 @@ def upsert_clip_analysis(
                 embedding_json,
                 embedding_dim,
                 features_json,
+                generated_prompt,
                 suggested_description,
                 suggested_tags_json,
                 error_message,
@@ -64,6 +67,7 @@ def get_clip_analysis(asset_id: int) -> dict | None:
         row = conn.execute(
             """
             SELECT asset_id, status, provider, model_name, model_version, embedding_json, embedding_dim, features_json,
+                   generated_prompt,
                    suggested_description, suggested_tags_json, error_message, analyzed_at
             FROM asset_clip_analysis
             WHERE asset_id = ?
@@ -90,7 +94,7 @@ def list_ready_embeddings_assets() -> list[dict]:
                 a.id, a.name, a.description, a.source, a.file_name, a.file_path, a.file_size, a.mime_type,
                 a.uploaded_by, a.created_at, a.updated_at,
                 c.status, c.provider, c.model_name, c.model_version, c.embedding_json, c.embedding_dim,
-                c.features_json, c.suggested_description, c.suggested_tags_json, c.error_message, c.analyzed_at
+                c.features_json, c.generated_prompt, c.suggested_description, c.suggested_tags_json, c.error_message, c.analyzed_at
             FROM asset_clip_analysis c
             JOIN assets a ON a.id = c.asset_id
             WHERE c.status = 'ready'

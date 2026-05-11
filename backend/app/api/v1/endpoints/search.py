@@ -1,11 +1,10 @@
-from difflib import SequenceMatcher
-import re
 from typing import Any
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from app.repositories import asset_repository, clip_repository
+from app.services.vector_search_service import vector_search_service
 
 router = APIRouter()
 
@@ -26,46 +25,6 @@ class SearchTextResponse(BaseModel):
     total: int
     page: int
     page_size: int
-
-
-def _tokenize(text: str) -> list[str]:
-    cleaned = text.strip().lower()
-    if not cleaned:
-        return []
-    parts = [part for part in re.split(r"[\s,，。;；!！?？/\\]+", cleaned) if part]
-    if parts:
-        return parts
-    return [cleaned]
-
-
-def _keyword_score(query: str, keywords: list[str], summary: str) -> float:
-    query_lower = query.strip().lower()
-    terms = _tokenize(query_lower)
-
-    score = 0.0
-    normalized_keywords = [keyword.lower() for keyword in keywords]
-    summary_lower = summary.lower()
-
-    for keyword in normalized_keywords:
-        if query_lower and query_lower in keyword:
-            score += 2.0
-    for term in terms:
-        for keyword in normalized_keywords:
-            if term in keyword:
-                score += 1.5
-        if term and term in summary_lower:
-            score += 0.8
-
-    if query_lower and query_lower in summary_lower:
-        score += 1.5
-
-    if score == 0.0:
-        candidates = normalized_keywords + ([summary_lower] if summary_lower else [])
-        best_ratio = 0.0
-        for candidate in candidates:
-            best_ratio = max(best_ratio, SequenceMatcher(None, query_lower, candidate).ratio())
-        score = best_ratio
-    return score
 
 
 def _build_asset_payload(row: dict) -> dict[str, Any]:
@@ -89,6 +48,7 @@ def _build_asset_payload(row: dict) -> dict[str, Any]:
             "status": row["status"],
             "model_name": row["model_name"],
             "model_version": row["model_version"],
+            "prompt": row["generated_prompt"],
             "summary": row["suggested_description"],
             "keywords": row["suggested_tags"],
             "suggested_description": row["suggested_description"],
@@ -102,29 +62,20 @@ def _build_asset_payload(row: dict) -> dict[str, Any]:
 @router.post("/text", response_model=SearchTextResponse)
 async def search_text(payload: SearchTextRequest) -> SearchTextResponse:
     rows = clip_repository.list_ready_embeddings_assets()
-
-    scored: list[tuple[dict, float]] = []
-    for row in rows:
-        keywords = row.get("suggested_tags") or []
-        summary = row.get("suggested_description") or ""
-        if not isinstance(keywords, list):
-            keywords = []
-        if not isinstance(summary, str):
-            summary = ""
-        score = _keyword_score(payload.query, [str(item) for item in keywords], summary)
-        scored.append((row, score))
-
-    scored.sort(key=lambda item: item[1], reverse=True)
-    total = len(scored)
+    rows_by_asset_id = {int(row["id"]): row for row in rows}
     start = (payload.page - 1) * payload.page_size
-    end = start + payload.page_size
-    paged = scored[start:end]
-
+    hits, total = vector_search_service.search_assets(
+        query=payload.query,
+        limit=payload.page_size,
+        offset=start,
+        asset_ids=list(rows_by_asset_id.keys()),
+    )
     items = [
         SearchResultItem(
-            asset=_build_asset_payload(row),
-            score=round(score, 6),
+            asset=_build_asset_payload(rows_by_asset_id[hit.asset_id]),
+            score=round(hit.score, 6),
         )
-        for row, score in paged
+        for hit in hits
+        if hit.asset_id in rows_by_asset_id
     ]
     return SearchTextResponse(items=items, total=total, page=payload.page, page_size=payload.page_size)

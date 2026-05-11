@@ -8,17 +8,22 @@ from fastapi.testclient import TestClient
 
 TEST_DB_PATH = Path(os.getenv("TEMP", ".")) / "clip_image_backend_tests.db"
 TEST_UPLOADS_DIR = Path(os.getenv("TEMP", ".")) / "clip_image_backend_uploads"
+TEST_VECTOR_DB_DIR = Path(os.getenv("TEMP", ".")) / "clip_image_backend_vector"
 if TEST_DB_PATH.exists():
     TEST_DB_PATH.unlink()
 if TEST_UPLOADS_DIR.exists():
     shutil.rmtree(TEST_UPLOADS_DIR)
+if TEST_VECTOR_DB_DIR.exists():
+    shutil.rmtree(TEST_VECTOR_DB_DIR)
 os.environ["DATABASE_PATH"] = str(TEST_DB_PATH)
 os.environ["UPLOADS_DIR"] = str(TEST_UPLOADS_DIR)
+os.environ["VECTOR_DB_PATH"] = str(TEST_VECTOR_DB_DIR)
 os.environ["CLIP_ENABLED"] = "true"
 os.environ["CLIP_PROVIDER"] = "mock"
 os.environ["CLIP_REQUIRED_ON_UPLOAD"] = "true"
 
 from app.main import app
+from app.services.vector_search_service import vector_search_service
 
 client = TestClient(app)
 
@@ -38,6 +43,7 @@ def _reset_users_table() -> None:
         conn.commit()
     if TEST_UPLOADS_DIR.exists():
         shutil.rmtree(TEST_UPLOADS_DIR)
+    vector_search_service.clear_index()
 
 
 def _register_and_login(username: str, password: str = "Passw0rd!") -> str:
@@ -190,6 +196,7 @@ def test_assets_upload_and_pagination() -> None:
     assert asset["mime_type"] == "image/png"
     assert asset["clip_analysis"]["provider"] == "mock"
     assert asset["clip_analysis"]["status"] == "ready"
+    assert isinstance(asset["clip_analysis"]["prompt"], str)
     assert isinstance(asset["clip_analysis"]["keywords"], list)
     assert len(asset["clip_analysis"]["keywords"]) >= 1
 
@@ -204,6 +211,7 @@ def test_assets_upload_and_pagination() -> None:
     assert detail_response.status_code == 200
     assert detail_response.json()["id"] == asset["id"]
     assert detail_response.json()["clip_analysis"]["status"] == "ready"
+    assert isinstance(detail_response.json()["clip_analysis"]["prompt"], str)
 
 
 def test_assets_permission_update_delete() -> None:
@@ -392,6 +400,8 @@ def test_clip_status_and_manual_analyze() -> None:
     data = analyze_resp.json()
     assert data["provider"] == "mock"
     assert data["model"] == "mock-vision"
+    assert isinstance(data["prompt"], str)
+    assert len(data["prompt"]) >= 10
     assert isinstance(data["summary"], str)
     assert len(data["keywords"]) >= 1
 

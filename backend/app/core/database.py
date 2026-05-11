@@ -155,6 +155,7 @@ def init_database() -> None:
                 embedding_json TEXT,
                 embedding_dim INTEGER,
                 features_json TEXT,
+                generated_prompt TEXT,
                 suggested_description TEXT,
                 suggested_tags_json TEXT,
                 error_message TEXT,
@@ -166,5 +167,7 @@ def init_database() -> None:
         clip_columns = {row["name"] for row in conn.execute("PRAGMA table_info(asset_clip_analysis)").fetchall()}
         if "provider" not in clip_columns:
             conn.execute("ALTER TABLE asset_clip_analysis ADD COLUMN provider TEXT NOT NULL DEFAULT 'chinese_clip'")
+        if "generated_prompt" not in clip_columns:
+            conn.execute("ALTER TABLE asset_clip_analysis ADD COLUMN generated_prompt TEXT")
         conn.commit()
 

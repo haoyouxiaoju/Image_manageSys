@@ -28,6 +28,11 @@ def _default_uploads_dir() -> str:
     return str(project_root / "data" / "uploads")
 
 
+def _default_vector_db_path() -> str:
+    project_root = Path(__file__).resolve().parents[3]
+    return str(project_root / "data" / "vector_db")
+
+
 @dataclass(frozen=True)
 class Settings:
     app_name: str = os.getenv("APP_NAME", "CLIP-Image_manageSys Backend")
@@ -55,6 +60,11 @@ class Settings:
     clip_required_on_upload: bool = _parse_bool(os.getenv("CLIP_REQUIRED_ON_UPLOAD", "false"), default=False)
     dashscope_api_key: str = os.getenv("DASHSCOPE_API_KEY", "")
     qwen_base_url: str = os.getenv("QWEN_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
+    text_embedding_model: str = os.getenv("TEXT_EMBEDDING_MODEL", "text-embedding-v4")
+    vector_enabled: bool = _parse_bool(os.getenv("VECTOR_ENABLED", "true"), default=True)
+    vector_provider: str = os.getenv("VECTOR_PROVIDER", "qdrant")
+    vector_collection_name: str = os.getenv("VECTOR_COLLECTION_NAME", "asset_prompts")
+    vector_db_path: str = os.getenv("VECTOR_DB_PATH", _default_vector_db_path())
 
 
 settings = Settings()
