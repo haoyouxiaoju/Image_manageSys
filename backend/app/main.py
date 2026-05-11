@@ -57,7 +57,8 @@ app.include_router(api_router, prefix=settings.api_prefix)
 
 uploads_dir = Path(settings.uploads_dir)
 uploads_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
+# Nginx 在上层处理 /uploads 静态文件，此 mount 仅在开发直连 FastAPI 时生效
+app.mount("/files", StaticFiles(directory=str(uploads_dir)), name="files")
 
 
 @app.get("/healthz")

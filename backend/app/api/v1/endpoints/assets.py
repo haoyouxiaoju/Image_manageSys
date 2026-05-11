@@ -134,7 +134,7 @@ def _to_asset_response(asset: dict, include_clip_embedding: bool = False) -> Ass
         versions=versions,
         created_at=asset["created_at"],
         updated_at=asset["updated_at"],
-        file_url=f"/uploads/{Path(asset['file_path']).name}",
+        file_url=f"/files/{Path(asset['file_path']).name}",
         download_url=f"/api/v1/assets/{asset['id']}/download",
         clip_analysis=_to_clip_analysis_response(clip_analysis, include_embedding=include_clip_embedding),
     )

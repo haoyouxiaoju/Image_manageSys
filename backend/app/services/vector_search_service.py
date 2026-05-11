@@ -50,6 +50,16 @@ class VectorSearchService:
 
         vector_dir = Path(settings.vector_db_path)
         vector_dir.mkdir(parents=True, exist_ok=True)
+
+        # 进程被强制终止时 Qdrant 锁文件可能残留，启动时清理
+        lock_file = vector_dir / ".lock"
+        if lock_file.exists():
+            try:
+                lock_file.unlink()
+                logger.info("Removed stale Qdrant lock file: %s", lock_file)
+            except OSError:
+                logger.warning("Cannot remove Qdrant lock file (maybe another instance is running): %s", lock_file)
+
         self._client = QdrantClient(path=str(vector_dir))
         self._ready = True
         logger.info("Vector search initialized. provider=qdrant path=%s", vector_dir)

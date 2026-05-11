@@ -39,7 +39,11 @@ model/chinese-clip/checkpoints/
 *.log
 tmp/
 temp/
+logs/
 
 #plan docs
 ./docs/plans/*
+
+# data
+data/vector_db/
 
