@@ -93,7 +93,7 @@ def list_ready_embeddings_assets() -> list[dict]:
                 c.features_json, c.suggested_description, c.suggested_tags_json, c.error_message, c.analyzed_at
             FROM asset_clip_analysis c
             JOIN assets a ON a.id = c.asset_id
-            WHERE c.status = 'ready' AND c.embedding_json IS NOT NULL
+            WHERE c.status = 'ready'
             ORDER BY a.id DESC
             """
         ).fetchall()
@@ -101,7 +101,7 @@ def list_ready_embeddings_assets() -> list[dict]:
     result: list[dict] = []
     for row in rows:
         item = dict(row)
-        item["embedding"] = json.loads(item.pop("embedding_json"))
+        item["embedding"] = json.loads(item.pop("embedding_json")) if item["embedding_json"] else None
         item["features"] = json.loads(item.pop("features_json")) if item["features_json"] else None
         item["suggested_tags"] = json.loads(item.pop("suggested_tags_json")) if item["suggested_tags_json"] else None
         result.append(item)

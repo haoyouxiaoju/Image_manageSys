@@ -48,11 +48,13 @@ class Settings:
     jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")
     access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "120"))
     clip_enabled: bool = _parse_bool(os.getenv("CLIP_ENABLED", "true"), default=True)
-    clip_provider: str = os.getenv("CLIP_PROVIDER", "chinese_clip")
-    clip_model_name: str = os.getenv("CLIP_MODEL_NAME", "OFA-Sys/chinese-clip-vit-base-patch16")
+    clip_provider: str = os.getenv("CLIP_PROVIDER", "qwen3_vl")
+    clip_model_name: str = os.getenv("CLIP_MODEL_NAME", "qwen3-vl-plus")
     clip_model_revision: str = os.getenv("CLIP_MODEL_REVISION", "main")
     clip_device: str = os.getenv("CLIP_DEVICE", "cpu")
     clip_required_on_upload: bool = _parse_bool(os.getenv("CLIP_REQUIRED_ON_UPLOAD", "false"), default=False)
+    dashscope_api_key: str = os.getenv("DASHSCOPE_API_KEY", "")
+    qwen_base_url: str = os.getenv("QWEN_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
 
 
 settings = Settings()

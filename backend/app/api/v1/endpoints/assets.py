@@ -40,6 +40,8 @@ class ClipAnalysisResponse(BaseModel):
     embedding_dim: int | None = None
     embedding: list[float] | None = None
     features: dict[str, Any] | None = None
+    summary: str | None = None
+    keywords: list[str] | None = None
     suggested_description: str | None = None
     suggested_tags: list[str] | None = None
     error_message: str | None = None
@@ -90,6 +92,8 @@ def _to_clip_analysis_response(data: dict | None, include_embedding: bool) -> Cl
         embedding_dim=data["embedding_dim"],
         embedding=embedding,
         features=data["features"],
+        summary=data["suggested_description"],
+        keywords=data["suggested_tags"],
         suggested_description=data["suggested_description"],
         suggested_tags=data["suggested_tags"],
         error_message=data["error_message"],

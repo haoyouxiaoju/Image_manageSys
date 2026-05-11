@@ -1,8 +1,8 @@
 # CLIP-Image_manageSys
 
-基于 **Chinese-CLIP** 的企业素材库系统（轻量 MVP）项目骨架。
+基于 **AI 视觉大模型（Qwen3-VL）** 的企业素材库系统（轻量 MVP）项目骨架。
 
-当前状态：后端对接端点已完成（认证、素材、版本、标签、分组、分享、审计、CLIP 分析、文本检索），当前主要工作为前端从 mock 切换到真实 API。
+当前状态：后端对接端点已完成（认证、素材、版本、标签、分组、分享、审计、图像关键词分析、文本检索），当前主要工作为前端从 mock 切换到真实 API。
 
 ## 目录结构
 
@@ -30,6 +30,7 @@ scripts/                # 脚本目录
 - `docs/plans/PLAN-20260507-p0-api-completion.md`
 - `docs/plans/PLAN-20260508-clip-upload-integration.md`
 - `docs/plans/PLAN-20260508-search-text-p1.md`
+- `docs/plans/PLAN-20260511-qwen-vl-keyword-strategy.md`
 
 ## 规划中的轻量技术栈
 
@@ -37,8 +38,8 @@ scripts/                # 脚本目录
 - 后端：FastAPI（Python）
 - 元数据：SQLite（后续可迁移 PostgreSQL）
 - 文件存储：本地磁盘（后续可迁移 MinIO）
-- 向量检索：FAISS
-- 模型：Chinese-CLIP
+- 检索策略：关键词匹配（后续可升级向量召回）
+- 模型：Qwen3-VL（Bailian）
 - 部署：Docker Compose
 
 ## 后端本地启动（Windows PowerShell）
@@ -50,7 +51,6 @@ Set-Location D:\myfiles\code\c\CLIP-Image_manageSys\backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements-dev.txt
-python -m pip install -r requirements-clip.txt
 $env:PYTHONPATH = "."
 ```
 
@@ -134,7 +134,7 @@ Invoke-RestMethod -Method Get `
 - `POST /api/v1/assets/upload`（需登录，admin/editor）
   - 支持：`JPG/PNG/WebP`
   - 大小限制：`<=20MB`
-  - 上传后自动执行 CLIP 分析（失败时在响应 `clip_analysis` 返回失败原因）
+  - 上传后自动执行 Qwen3-VL 图片关键词分析（失败时在响应 `clip_analysis` 返回失败原因）
 - `GET /api/v1/assets?page=1&page_size=10&query=...`（访客可读）
 - `GET /api/v1/assets/{id}`（访客可读）
 - `PUT /api/v1/assets/{id}`（admin 可改全部，editor 仅可改自己上传）
@@ -150,24 +150,26 @@ Invoke-RestMethod -Method Get `
 - 分享：`GET/POST/DELETE /api/v1/share-links`
 - 审计：`GET /api/v1/audit-logs`（admin）
 
-## CLIP 分析接口（已实现）
+## 图像关键词分析接口（已实现）
 
 - `GET /api/v1/clip/status`：查看模型服务状态（enabled/provider/ready/last_error）
-- `POST /api/v1/clip/analyze`：上传图片执行 CLIP 分析（需登录，admin/editor）
-- 返回会包含 `provider`，`chinese_clip` 表示真实模型，`mock` 只用于本地/测试。
-- 结果中的 `content` 是基于候选标签集的零样本语义标签，不是 OCR 或标题生成。
+- `POST /api/v1/clip/analyze`：上传图片执行关键词提取（需登录，admin/editor）
+- 返回会包含 `provider`，`qwen3_vl` 表示真实模型，`mock` 只用于本地/测试。
+- 返回字段聚焦 `summary + keywords`，用于素材标签生成。
 
 ## 语义检索接口（已实现）
 
 - `POST /api/v1/search/text`：文本搜图，请求 `{ query, page, page_size }`
 - 响应：`{ items: [{ asset, score }], total, page, page_size }`
+- 当前按关键词/摘要匹配打分，不依赖向量余弦。
 
 可配置环境变量：
 
-- `CLIP_ENABLED`：是否启用 CLIP（默认 `true`）
-- `CLIP_PROVIDER`：`chinese_clip` 或 `mock`（默认 `chinese_clip`）
-- `CLIP_MODEL_NAME`：默认 `OFA-Sys/chinese-clip-vit-base-patch16`
+- `CLIP_ENABLED`：是否启用图片分析（默认 `true`）
+- `CLIP_PROVIDER`：`qwen3_vl` 或 `mock`（默认 `qwen3_vl`）
+- `CLIP_MODEL_NAME`：默认 `qwen3-vl-plus`
 - `CLIP_MODEL_REVISION`：默认 `main`
-- `CLIP_DEVICE`：默认 `cpu`
 - `CLIP_REQUIRED_ON_UPLOAD`：上传时是否强制 CLIP 成功（默认 `false`）
+- `DASHSCOPE_API_KEY`：Bailian API Key（使用 `qwen3_vl` 必填）
+- `QWEN_BASE_URL`：默认 `https://dashscope.aliyuncs.com/compatible-mode/v1`
 

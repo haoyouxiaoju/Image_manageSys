@@ -190,7 +190,8 @@ def test_assets_upload_and_pagination() -> None:
     assert asset["mime_type"] == "image/png"
     assert asset["clip_analysis"]["provider"] == "mock"
     assert asset["clip_analysis"]["status"] == "ready"
-    assert asset["clip_analysis"]["embedding_dim"] == 32
+    assert isinstance(asset["clip_analysis"]["keywords"], list)
+    assert len(asset["clip_analysis"]["keywords"]) >= 1
 
     list_response = client.get("/api/v1/assets?page=1&page_size=10")
     assert list_response.status_code == 200
@@ -390,9 +391,9 @@ def test_clip_status_and_manual_analyze() -> None:
     assert analyze_resp.status_code == 200
     data = analyze_resp.json()
     assert data["provider"] == "mock"
-    assert data["model"] == "mock-clip"
-    assert data["embedding_dim"] == 32
-    assert len(data["suggested_tags"]) >= 1
+    assert data["model"] == "mock-vision"
+    assert isinstance(data["summary"], str)
+    assert len(data["keywords"]) >= 1
 
 
 def test_search_text_semantic_pagination() -> None:

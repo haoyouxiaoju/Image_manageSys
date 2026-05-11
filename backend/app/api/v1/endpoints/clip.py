@@ -18,11 +18,8 @@ class ClipAnalyzeResponse(BaseModel):
     provider: str
     model: str
     model_version: str
-    embedding: list[float]
-    embedding_dim: int
-    features: dict
-    suggested_description: str
-    suggested_tags: list[str]
+    summary: str
+    keywords: list[str]
 
 
 @router.get("/status")
@@ -57,9 +54,6 @@ async def clip_analyze(request: Request, file: UploadFile = File(...)) -> ClipAn
         provider=result.provider,
         model=result.model_name,
         model_version=result.model_version,
-        embedding=result.embedding,
-        embedding_dim=len(result.embedding),
-        features=result.features,
-        suggested_description=result.suggested_description,
-        suggested_tags=result.suggested_tags,
+        summary=result.suggested_description,
+        keywords=result.suggested_tags,
     )

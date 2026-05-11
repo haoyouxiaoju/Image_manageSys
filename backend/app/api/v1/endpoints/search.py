@@ -1,11 +1,11 @@
-from math import sqrt
+from difflib import SequenceMatcher
+import re
 from typing import Any
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from app.repositories import asset_repository, clip_repository
-from app.services.clip_service import clip_service
 
 router = APIRouter()
 
@@ -28,17 +28,44 @@ class SearchTextResponse(BaseModel):
     page_size: int
 
 
-def _cosine_similarity(vec1: list[float], vec2: list[float]) -> float:
-    dot = 0.0
-    norm1 = 0.0
-    norm2 = 0.0
-    for left, right in zip(vec1, vec2):
-        dot += left * right
-        norm1 += left * left
-        norm2 += right * right
-    if norm1 <= 0.0 or norm2 <= 0.0:
-        return 0.0
-    return dot / (sqrt(norm1) * sqrt(norm2))
+def _tokenize(text: str) -> list[str]:
+    cleaned = text.strip().lower()
+    if not cleaned:
+        return []
+    parts = [part for part in re.split(r"[\s,，。;；!！?？/\\]+", cleaned) if part]
+    if parts:
+        return parts
+    return [cleaned]
+
+
+def _keyword_score(query: str, keywords: list[str], summary: str) -> float:
+    query_lower = query.strip().lower()
+    terms = _tokenize(query_lower)
+
+    score = 0.0
+    normalized_keywords = [keyword.lower() for keyword in keywords]
+    summary_lower = summary.lower()
+
+    for keyword in normalized_keywords:
+        if query_lower and query_lower in keyword:
+            score += 2.0
+    for term in terms:
+        for keyword in normalized_keywords:
+            if term in keyword:
+                score += 1.5
+        if term and term in summary_lower:
+            score += 0.8
+
+    if query_lower and query_lower in summary_lower:
+        score += 1.5
+
+    if score == 0.0:
+        candidates = normalized_keywords + ([summary_lower] if summary_lower else [])
+        best_ratio = 0.0
+        for candidate in candidates:
+            best_ratio = max(best_ratio, SequenceMatcher(None, query_lower, candidate).ratio())
+        score = best_ratio
+    return score
 
 
 def _build_asset_payload(row: dict) -> dict[str, Any]:
@@ -62,8 +89,8 @@ def _build_asset_payload(row: dict) -> dict[str, Any]:
             "status": row["status"],
             "model_name": row["model_name"],
             "model_version": row["model_version"],
-            "embedding_dim": row["embedding_dim"],
-            "features": row["features"],
+            "summary": row["suggested_description"],
+            "keywords": row["suggested_tags"],
             "suggested_description": row["suggested_description"],
             "suggested_tags": row["suggested_tags"],
             "error_message": row["error_message"],
@@ -74,17 +101,17 @@ def _build_asset_payload(row: dict) -> dict[str, Any]:
 
 @router.post("/text", response_model=SearchTextResponse)
 async def search_text(payload: SearchTextRequest) -> SearchTextResponse:
-    text_embedding = clip_service.encode_text(payload.query)
     rows = clip_repository.list_ready_embeddings_assets()
 
     scored: list[tuple[dict, float]] = []
     for row in rows:
-        image_embedding = row["embedding"]
-        if not isinstance(image_embedding, list):
-            continue
-        if len(image_embedding) != len(text_embedding):
-            continue
-        score = _cosine_similarity(text_embedding, image_embedding)
+        keywords = row.get("suggested_tags") or []
+        summary = row.get("suggested_description") or ""
+        if not isinstance(keywords, list):
+            keywords = []
+        if not isinstance(summary, str):
+            summary = ""
+        score = _keyword_score(payload.query, [str(item) for item in keywords], summary)
         scored.append((row, score))
 
     scored.sort(key=lambda item: item[1], reverse=True)
