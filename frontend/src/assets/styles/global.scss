@@ -291,8 +291,8 @@ html, body {
   .sub { font-size: 12px; color: #c0c4cc; margin-top: 6px; }
 }
 
-// CLIP 面板
-.clip-panel {
+// CLIP 面板（保留向后兼容）
+.clip-panel, .analysis-panel {
   background: linear-gradient(135deg, #faf5ff 0%, #ecf5ff 100%);
   border: 1px solid #e0d4f5;
   border-radius: 8px;

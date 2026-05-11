@@ -51,8 +51,8 @@ function goDetail(id: number) {
 
 <template>
   <div class="search-hero">
-    <h2>以文搜图 · Chinese-CLIP 语义检索</h2>
-    <p class="sub">输入自然语言描述，AI 在 512 维语义空间中匹配最相似的图片</p>
+    <h2>以文搜图 · AI 语义检索</h2>
+    <p class="sub">输入自然语言描述，AI 在语义空间中匹配最相似的图片</p>
     <el-input
       v-model="localQuery" size="large"
       placeholder="例如：蓝色科技感背景图、年会大合影、咖啡、猫..."
@@ -70,11 +70,11 @@ function goDetail(id: number) {
   </div>
 
   <el-collapse v-if="store.searchResults.length===0 && !store.searchQuery && !store.searching" style="max-width:700px;margin:0 auto 20px">
-    <el-collapse-item title="CLIP 语义搜索是如何工作的？" name="1">
+    <el-collapse-item title="AI 语义搜索是如何工作的？" name="1">
       <div style="font-size:13px;color:#606266;line-height:2">
-        <p><b>1. 图像入库：</b>Chinese-CLIP 图像编码器将图片映射为 <b>512 维向量</b>，存入 FAISS。</p>
-        <p><b>2. 搜索：</b>中文文本经文本编码器生成 <b>512 维向量</b>。</p>
-        <p><b>3. 匹配：</b>FAISS 计算余弦相似度，返回 Top-K 结果。</p>
+        <p><b>1. 图像入库：</b>Qwen3-VL 模型分析图片内容，生成可复现提示词，存入 Qdrant 向量数据库。</p>
+        <p><b>2. 搜索：</b>用户输入自然语言描述，系统在向量空间中检索语义相近的图片。</p>
+        <p><b>3. 匹配：</b>Qdrant 计算余弦相似度，返回 Top-K 结果。</p>
         <p><b>4. 优势：</b>不依赖精确匹配，"蓝色科技背景"能找到没有"蓝色"标签、但视觉是蓝色科技风的图。</p>
       </div>
     </el-collapse-item>

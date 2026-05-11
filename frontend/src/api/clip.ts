@@ -11,13 +11,12 @@ export interface ClipStatus {
 }
 
 export interface ClipAnalyzeResponse {
+  provider: string
   model: string
   model_version: string
-  embedding: number[]
-  embedding_dim: number
-  features: Record<string, any>
-  suggested_description: string
-  suggested_tags: string[]
+  prompt: string
+  summary: string
+  keywords: string[]
 }
 
 export const clipApi = {
