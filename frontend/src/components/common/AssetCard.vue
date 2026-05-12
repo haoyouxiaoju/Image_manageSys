@@ -8,7 +8,7 @@ defineEmits<{ click: [] }>()
 <template>
   <div class="asset-card" @click="$emit('click')">
     <img :src="asset.thumb" :alt="asset.name" class="thumb" loading="lazy">
-    <span class="ai-badge" v-if="asset.clipDesc">CLIP</span>
+    <span class="ai-badge" v-if="asset.visionAnalysis?.prompt">AI</span>
     <div class="card-info">
       <div class="card-name">{{ asset.name }}</div>
       <div class="card-meta">

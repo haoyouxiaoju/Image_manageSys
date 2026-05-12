@@ -32,7 +32,7 @@ _MOCK_KEYWORDS = [
 
 
 @dataclass
-class ClipAnalysisResult:
+class VisionAnalysisResult:
     provider: str
     model_name: str
     model_version: str
@@ -43,9 +43,9 @@ class ClipAnalysisResult:
     suggested_tags: list[str]
 
 
-class ClipService:
+class VisionService:
     def __init__(self) -> None:
-        self._provider = settings.clip_provider.strip().lower()
+        self._provider = settings.vision_provider.strip().lower()
         self._initialized = False
         self._ready = False
         self._last_error: str | None = None
@@ -55,8 +55,8 @@ class ClipService:
         self._ready = False
         self._last_error = None
 
-        if not settings.clip_enabled:
-            logger.info("Vision service disabled by CLIP_ENABLED.")
+        if not settings.vision_enabled:
+            logger.info("Vision service disabled by VISION_ENABLED.")
             return
 
         if self._provider == "mock":
@@ -65,7 +65,7 @@ class ClipService:
             return
 
         if self._provider != "qwen3_vl":
-            self._last_error = f"Unsupported CLIP_PROVIDER: {self._provider}"
+            self._last_error = f"Unsupported VISION_PROVIDER: {self._provider}"
             logger.error(self._last_error)
             return
 
@@ -75,20 +75,20 @@ class ClipService:
             return
 
         self._ready = True
-        logger.info("Qwen3-VL service configured. model=%s endpoint=%s", settings.clip_model_name, settings.qwen_base_url)
+        logger.info("Qwen3-VL service configured. model=%s endpoint=%s", settings.vision_model_name, settings.qwen_base_url)
 
     def status(self) -> dict[str, Any]:
         return {
-            "enabled": settings.clip_enabled,
+            "enabled": settings.vision_enabled,
             "provider": self._provider,
-            "model_name": settings.clip_model_name if self._provider != "mock" else "mock-vision",
-            "model_version": settings.clip_model_revision if self._provider != "mock" else "mock-v1",
+            "model_name": settings.vision_model_name if self._provider != "mock" else "mock-vision",
+            "model_version": settings.vision_model_revision if self._provider != "mock" else "mock-v1",
             "initialized": self._initialized,
             "ready": self._ready,
             "last_error": self._last_error,
         }
 
-    def analyze_file(self, image_path: str | Path) -> ClipAnalysisResult:
+    def analyze_file(self, image_path: str | Path) -> VisionAnalysisResult:
         self._ensure_ready()
         path = Path(image_path)
         if not path.exists():
@@ -99,7 +99,7 @@ class ClipService:
         return self._analyze_qwen(path)
 
     def _ensure_ready(self) -> None:
-        if not settings.clip_enabled:
+        if not settings.vision_enabled:
             raise ApiError(status_code=503, code="VISION_DISABLED", message="Vision service is disabled.")
         if not self._initialized:
             raise ApiError(status_code=503, code="VISION_NOT_INITIALIZED", message="Vision service is not initialized.")
@@ -107,7 +107,7 @@ class ClipService:
             reason = self._last_error or "Vision model is not ready."
             raise ApiError(status_code=503, code="VISION_MODEL_UNAVAILABLE", message=reason)
 
-    def _analyze_mock(self, image_path: Path) -> ClipAnalysisResult:
+    def _analyze_mock(self, image_path: Path) -> VisionAnalysisResult:
         digest = sha256(image_path.read_bytes()).digest()
         keywords = [
             _MOCK_KEYWORDS[digest[0] % len(_MOCK_KEYWORDS)],
@@ -120,7 +120,7 @@ class ClipService:
         generated_prompt = (
             f"{'、'.join(deduped)}，商业产品摄影，主体清晰，构图稳定，写实风格，适合企业素材库场景。"
         )
-        return ClipAnalysisResult(
+        return VisionAnalysisResult(
             provider="mock",
             model_name="mock-vision",
             model_version="mock-v1",
@@ -131,7 +131,7 @@ class ClipService:
             suggested_tags=deduped,
         )
 
-    def _analyze_qwen(self, image_path: Path) -> ClipAnalysisResult:
+    def _analyze_qwen(self, image_path: Path) -> VisionAnalysisResult:
         mime_type = mimetypes.guess_type(image_path.name)[0] or "image/jpeg"
         image_b64 = _b64encode(image_path.read_bytes())
         data_uri = f"data:{mime_type};base64,{image_b64}"
@@ -154,17 +154,17 @@ Format:
 1. **prompt (中文提示词)**:
    - 目标：能够被 Midjourney/Stable Diffusion 等工具高精度复现原图。
    - 结构必须包含：[主体描述] + [环境/背景] + [构图/视角] + [光影/天气] + [艺术风格/渲染引擎] + [色调/氛围]。
-   - 要求：描述需具象化。例如，不要说“一个漂亮的女人”，要说“一位穿着白色丝绸衬衫的亚洲女性，黑色长发，自然妆容”。
+   - 要求：描述需具象化。例如，不要说"一个漂亮的女人"，要说"一位穿着白色丝绸衬衫的亚洲女性，黑色长发，自然妆容"。
 
 2. **summary (画面核心陈述)**:
    - 定义：用简练、客观的语言概括图片的核心内容（谁/什么 + 在做什么/状态 + 在哪里）。
    - 长度：限制在 20-40 字以内。
-   - 禁忌：禁止使用“这张图片展示了...”、“图中有...”等废话开头，直接描述画面。
+   - 禁忌：禁止使用"这张图片展示了..."、"图中有..."等废话开头，直接描述画面。
 
 3. **keywords (标签列表)**:
    - 数量：严格控制在 6-15 个之间。
    - 类型：优先提取实体名词（如： MacBook Pro, 拿铁咖啡, 绿植）、具体风格（如： 极简主义, 赛博朋克）、具体动作或状态。
-   - 禁忌：严禁使用“高清”、“精美”、“高质量”、“图片”、“摄影”等无信息量的泛词。
+   - 禁忌：严禁使用"高清"、"精美"、"高质量"、"图片"、"摄影"等无信息量的泛词。
 
 # Example Logic
 Input: [一张在阳光下办公桌上的笔记本电脑图片]
@@ -178,7 +178,7 @@ Output:
 
 
         payload = {
-            "model": settings.clip_model_name,
+            "model": settings.vision_model_name,
             "messages": [
                 {"role": "system", "content": "你是严格输出 JSON 的视觉理解助手。"},
                 {
@@ -225,10 +225,10 @@ Output:
         if not summary:
             summary = f"图片包含：{'、'.join(keywords[:6])}。"
 
-        return ClipAnalysisResult(
+        return VisionAnalysisResult(
             provider="qwen3_vl",
-            model_name=settings.clip_model_name,
-            model_version=settings.clip_model_revision,
+            model_name=settings.vision_model_name,
+            model_version=settings.vision_model_revision,
             embedding=None,
             features={"strategy": "qwen-prompt-keywords"},
             generated_prompt=generated_prompt,
@@ -264,4 +264,4 @@ def _b64encode(data: bytes) -> str:
     return base64.b64encode(data).decode("ascii")
 
 
-clip_service = ClipService()
+vision_service = VisionService()

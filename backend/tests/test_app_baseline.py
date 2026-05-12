@@ -6,9 +6,9 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
-TEST_DB_PATH = Path(os.getenv("TEMP", ".")) / "clip_image_backend_tests.db"
-TEST_UPLOADS_DIR = Path(os.getenv("TEMP", ".")) / "clip_image_backend_uploads"
-TEST_VECTOR_DB_DIR = Path(os.getenv("TEMP", ".")) / "clip_image_backend_vector"
+TEST_DB_PATH = Path(os.getenv("TEMP", ".")) / "vision_backend_tests.db"
+TEST_UPLOADS_DIR = Path(os.getenv("TEMP", ".")) / "vision_backend_uploads"
+TEST_VECTOR_DB_DIR = Path(os.getenv("TEMP", ".")) / "vision_backend_vector"
 if TEST_DB_PATH.exists():
     TEST_DB_PATH.unlink()
 if TEST_UPLOADS_DIR.exists():
@@ -18,9 +18,9 @@ if TEST_VECTOR_DB_DIR.exists():
 os.environ["DATABASE_PATH"] = str(TEST_DB_PATH)
 os.environ["UPLOADS_DIR"] = str(TEST_UPLOADS_DIR)
 os.environ["VECTOR_DB_PATH"] = str(TEST_VECTOR_DB_DIR)
-os.environ["CLIP_ENABLED"] = "true"
-os.environ["CLIP_PROVIDER"] = "mock"
-os.environ["CLIP_REQUIRED_ON_UPLOAD"] = "true"
+os.environ["VISION_ENABLED"] = "true"
+os.environ["VISION_PROVIDER"] = "mock"
+os.environ["VISION_REQUIRED_ON_UPLOAD"] = "true"
 
 from app.main import app
 from app.services.vector_search_service import vector_search_service
@@ -30,7 +30,7 @@ client = TestClient(app)
 
 def _reset_users_table() -> None:
     with sqlite3.connect(TEST_DB_PATH) as conn:
-        conn.execute("DELETE FROM asset_clip_analysis")
+        conn.execute("DELETE FROM asset_vision_analysis")
         conn.execute("DELETE FROM share_links")
         conn.execute("DELETE FROM collection_assets")
         conn.execute("DELETE FROM collections")
@@ -194,11 +194,11 @@ def test_assets_upload_and_pagination() -> None:
     asset = upload_response.json()
     assert asset["name"] == "demo"
     assert asset["mime_type"] == "image/png"
-    assert asset["clip_analysis"]["provider"] == "mock"
-    assert asset["clip_analysis"]["status"] == "ready"
-    assert isinstance(asset["clip_analysis"]["prompt"], str)
-    assert isinstance(asset["clip_analysis"]["keywords"], list)
-    assert len(asset["clip_analysis"]["keywords"]) >= 1
+    assert asset["vision_analysis"]["provider"] == "mock"
+    assert asset["vision_analysis"]["status"] == "ready"
+    assert isinstance(asset["vision_analysis"]["prompt"], str)
+    assert isinstance(asset["vision_analysis"]["keywords"], list)
+    assert len(asset["vision_analysis"]["keywords"]) >= 1
 
     list_response = client.get("/api/v1/assets?page=1&page_size=10")
     assert list_response.status_code == 200
@@ -210,8 +210,8 @@ def test_assets_upload_and_pagination() -> None:
     detail_response = client.get(f"/api/v1/assets/{asset['id']}")
     assert detail_response.status_code == 200
     assert detail_response.json()["id"] == asset["id"]
-    assert detail_response.json()["clip_analysis"]["status"] == "ready"
-    assert isinstance(detail_response.json()["clip_analysis"]["prompt"], str)
+    assert detail_response.json()["vision_analysis"]["status"] == "ready"
+    assert isinstance(detail_response.json()["vision_analysis"]["prompt"], str)
 
 
 def test_assets_permission_update_delete() -> None:
@@ -381,18 +381,18 @@ def test_collections_share_links_and_audit_logs() -> None:
     assert len(logs_ok.json()) >= 1
 
 
-def test_clip_status_and_manual_analyze() -> None:
+def test_vision_status_and_manual_analyze() -> None:
     _reset_users_table()
     token = _register_and_login(f"admin_{uuid4().hex[:8]}")
 
-    status_resp = client.get("/api/v1/clip/status")
+    status_resp = client.get("/api/v1/vision/status")
     assert status_resp.status_code == 200
     assert status_resp.json()["enabled"] is True
     assert status_resp.json()["provider"] == "mock"
     assert status_resp.json()["ready"] is True
 
     analyze_resp = client.post(
-        "/api/v1/clip/analyze",
+        "/api/v1/vision/analyze",
         headers={"Authorization": f"Bearer {token}"},
         files={"file": ("analyze.png", b"ANALYZEPNG", "image/png")},
     )
@@ -437,8 +437,8 @@ def test_search_text_semantic_pagination() -> None:
     assert payload["page_size"] == 2
     assert len(payload["items"]) == 2
     assert payload["items"][0]["score"] >= payload["items"][1]["score"]
-    assert payload["items"][0]["asset"]["clip_analysis"]["provider"] == "mock"
-    assert payload["items"][0]["asset"]["clip_analysis"]["status"] == "ready"
+    assert payload["items"][0]["asset"]["vision_analysis"]["provider"] == "mock"
+    assert payload["items"][0]["asset"]["vision_analysis"]["status"] == "ready"
 
     second_page = client.post(
         "/api/v1/search/text",

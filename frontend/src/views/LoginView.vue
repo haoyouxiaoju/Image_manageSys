@@ -70,7 +70,7 @@ async function handleRegister() {
         {{ mode === 'login' ? '登录' : '注册' }}
       </h2>
       <p style="text-align:center;color:#909399;font-size:13px;margin-bottom:24px">
-        CLIP-Image 企业素材库管理系统
+        Image 企业素材库管理系统
       </p>
 
       <el-form label-width="0" @submit.prevent>

@@ -4,7 +4,7 @@ from typing import Any
 from app.core.database import get_connection
 
 
-def upsert_clip_analysis(
+def upsert_vision_analysis(
     asset_id: int,
     status: str,
     provider: str,
@@ -25,7 +25,7 @@ def upsert_clip_analysis(
     with get_connection() as conn:
         conn.execute(
             """
-            INSERT INTO asset_clip_analysis (
+            INSERT INTO asset_vision_analysis (
                 asset_id, status, provider, model_name, model_version, embedding_json, embedding_dim, features_json,
                 generated_prompt, suggested_description, suggested_tags_json, error_message, analyzed_at
             )
@@ -62,14 +62,14 @@ def upsert_clip_analysis(
         conn.commit()
 
 
-def get_clip_analysis(asset_id: int) -> dict | None:
+def get_vision_analysis(asset_id: int) -> dict | None:
     with get_connection() as conn:
         row = conn.execute(
             """
             SELECT asset_id, status, provider, model_name, model_version, embedding_json, embedding_dim, features_json,
                    generated_prompt,
                    suggested_description, suggested_tags_json, error_message, analyzed_at
-            FROM asset_clip_analysis
+            FROM asset_vision_analysis
             WHERE asset_id = ?
             """,
             (asset_id,),
@@ -95,7 +95,7 @@ def list_ready_embeddings_assets() -> list[dict]:
                 a.uploaded_by, a.created_at, a.updated_at,
                 c.status, c.provider, c.model_name, c.model_version, c.embedding_json, c.embedding_dim,
                 c.features_json, c.generated_prompt, c.suggested_description, c.suggested_tags_json, c.error_message, c.analyzed_at
-            FROM asset_clip_analysis c
+            FROM asset_vision_analysis c
             JOIN assets a ON a.id = c.asset_id
             WHERE c.status = 'ready'
             ORDER BY a.id DESC

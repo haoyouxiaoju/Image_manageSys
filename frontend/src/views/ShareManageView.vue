@@ -18,9 +18,9 @@ interface ShareLink {
 }
 
 const shareLinks = ref<ShareLink[]>([
-  { id:1, assetId:1, assetName:'科技感蓝色背景图', token:'abc123', url:'https://clip-image.example.com/share/abc123', created:'2026-05-07 14:30', expiresAt:'2026-05-08 14:30', isActive:true },
-  { id:2, assetId:4, assetName:'双十一促销海报',   token:'def456', url:'https://clip-image.example.com/share/def456', created:'2026-05-06 10:15', expiresAt:'2026-05-07 10:15', isActive:false },
-  { id:3, assetId:7, assetName:'春季新品发布海报',   token:'ghi789', url:'https://clip-image.example.com/share/ghi789', created:'2026-05-05 16:00', expiresAt:'2026-05-06 16:00', isActive:true },
+  { id:1, assetId:1, assetName:'科技感蓝色背景图', token:'abc123', url:'https://image.example.com/share/abc123', created:'2026-05-07 14:30', expiresAt:'2026-05-08 14:30', isActive:true },
+  { id:2, assetId:4, assetName:'双十一促销海报',   token:'def456', url:'https://image.example.com/share/def456', created:'2026-05-06 10:15', expiresAt:'2026-05-07 10:15', isActive:false },
+  { id:3, assetId:7, assetName:'春季新品发布海报',   token:'ghi789', url:'https://image.example.com/share/ghi789', created:'2026-05-05 16:00', expiresAt:'2026-05-06 16:00', isActive:true },
 ])
 
 function copyUrl(link: ShareLink) {
@@ -70,7 +70,7 @@ function confirmCreateLink() {
     assetId: asset.id,
     assetName: asset.name,
     token,
-    url: `https://clip-image.example.com/share/${token}`,
+    url: `https://image.example.com/share/${token}`,
     created: fmt(now),
     expiresAt: fmt(expires),
     isActive: true,

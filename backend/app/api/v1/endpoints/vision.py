@@ -7,14 +7,14 @@ from pydantic import BaseModel
 from app.core.auth_context import get_current_user, require_editor_or_admin
 from app.core.config import settings
 from app.core.exceptions import ApiError
-from app.services.clip_service import clip_service
+from app.services.vision_service import vision_service
 
 router = APIRouter()
 
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 
-class ClipAnalyzeResponse(BaseModel):
+class VisionAnalyzeResponse(BaseModel):
     provider: str
     model: str
     model_version: str
@@ -24,19 +24,19 @@ class ClipAnalyzeResponse(BaseModel):
 
 
 @router.get("/status")
-async def clip_status() -> dict:
-    return clip_service.status()
+async def vision_status() -> dict:
+    return vision_service.status()
 
 
-@router.post("/analyze", response_model=ClipAnalyzeResponse)
-async def clip_analyze(request: Request, file: UploadFile = File(...)) -> ClipAnalyzeResponse:
+@router.post("/analyze", response_model=VisionAnalyzeResponse)
+async def vision_analyze(request: Request, file: UploadFile = File(...)) -> VisionAnalyzeResponse:
     user = get_current_user(request, required=True)
     require_editor_or_admin(user)
 
     if file.content_type not in ALLOWED_MIME_TYPES:
         raise ApiError(status_code=400, code="UNSUPPORTED_FILE_TYPE", message="Only JPG/PNG/WebP are supported.")
 
-    uploads_tmp_dir = Path(settings.uploads_dir) / "clip-tmp"
+    uploads_tmp_dir = Path(settings.uploads_dir) / "vision-tmp"
     uploads_tmp_dir.mkdir(parents=True, exist_ok=True)
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in {".jpg", ".jpeg", ".png", ".webp"}:
@@ -46,12 +46,12 @@ async def clip_analyze(request: Request, file: UploadFile = File(...)) -> ClipAn
     content = await file.read()
     temp_path.write_bytes(content)
     try:
-        result = clip_service.analyze_file(temp_path)
+        result = vision_service.analyze_file(temp_path)
     finally:
         if temp_path.exists():
             temp_path.unlink()
 
-    return ClipAnalyzeResponse(
+    return VisionAnalyzeResponse(
         provider=result.provider,
         model=result.model_name,
         model_version=result.model_version,

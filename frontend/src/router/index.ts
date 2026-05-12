@@ -45,10 +45,10 @@ const router = createRouter({
       meta: { title: '上传素材', requiresAuth: true, minRole: 'editor' },
     },
     {
-      path: '/clip-info',
-      name: 'ClipInfo',
-      component: () => import('@/views/ClipInfoView.vue'),
-      meta: { title: 'CLIP 能力说明' },
+      path: '/vision-info',
+      name: 'VisionInfo',
+      component: () => import('@/views/VisionInfoView.vue'),
+      meta: { title: 'AI 视觉能力说明' },
     },
     {
       path: '/share-manage',
@@ -73,7 +73,7 @@ const router = createRouter({
 
 // 全局路由守卫
 router.beforeEach((to, _from, next) => {
-  document.title = (to.meta.title as string) || 'CLIP-Image 素材库'
+  document.title = (to.meta.title as string) || 'Image 素材库'
 
   const authStore = useAuthStore()
 

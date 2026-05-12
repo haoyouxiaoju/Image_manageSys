@@ -60,7 +60,7 @@ function addTag(v: string) {
   newTag.value = ''
 }
 function copyShareLink() {
-  const link = `https://clip-image.example.com/share/${asset.value?.id}/${Date.now()}`
+  const link = `https://image.example.com/share/${asset.value?.id}/${Date.now()}`
   navigator.clipboard.writeText(link).then(() => ElMessage.success('分享链接已复制，有效期24小时'))
 }
 
@@ -204,13 +204,12 @@ function submitVersion() {
       </span>
     </div>
 
-    <div v-if="asset.clipDesc" class="clip-panel" style="margin-top:16px">
-      <div class="panel-title"><el-icon><Cpu /></el-icon>CLIP 语义理解</div>
+    <div v-if="asset.visionAnalysis?.prompt" class="vision-panel" style="margin-top:16px">
+      <div class="panel-title"><el-icon><Cpu /></el-icon>AI 视觉分析</div>
       <div style="font-size:13px;color:#606266;line-height:1.8">
-        <p><b>语义描述：</b>{{ asset.clipDesc }}</p>
-        <p><b>视觉风格：</b>{{ asset.clipStyle }}</p>
-        <p><b>色彩倾向：</b>{{ asset.clipColor }}</p>
-        <p><b>向量：</b>512 维 · FAISS 索引 #{{ asset.id }}</p>
+        <p><b>可复现提示词：</b>{{ asset.visionAnalysis.prompt }}</p>
+        <p v-if="asset.visionAnalysis.summary"><b>摘要：</b>{{ asset.visionAnalysis.summary }}</p>
+        <p v-if="asset.visionAnalysis.keywords?.length"><b>关键词：</b>{{ asset.visionAnalysis.keywords.join('、') }}</p>
       </div>
     </div>
 

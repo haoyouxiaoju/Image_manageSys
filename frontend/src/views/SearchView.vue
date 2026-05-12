@@ -73,17 +73,21 @@ function goDetail(id: number) {
     <el-collapse-item title="AI 语义搜索是如何工作的？" name="1">
       <div style="font-size:13px;color:#606266;line-height:2">
         <p><b>1. 图像入库：</b>Qwen3-VL 模型分析图片内容，生成可复现提示词，存入 Qdrant 向量数据库。</p>
-        <p><b>2. 搜索：</b>用户输入自然语言描述，系统在向量空间中检索语义相近的图片。</p>
-        <p><b>3. 匹配：</b>Qdrant 计算余弦相似度，返回 Top-K 结果。</p>
+        <p><b>2. 搜索：</b>Agent 理解用户意图，调用向量搜索引擎从多角度检索匹配的图片。</p>
+        <p><b>3. 匹配：</b>LLM 多轮检索 + 语义匹配，为每张图片生成中文匹配理由。</p>
         <p><b>4. 优势：</b>不依赖精确匹配，"蓝色科技背景"能找到没有"蓝色"标签、但视觉是蓝色科技风的图。</p>
       </div>
     </el-collapse-item>
   </el-collapse>
 
   <template v-if="store.searchResults.length > 0">
+    <div v-if="store.searchReasoning" class="reasoning-box" style="margin-top:16px;background:#f0f9ff;border:1px solid #b3d8ff;border-radius:8px;padding:12px 16px">
+      <span style="font-size:12px;color:#409eff;font-weight:600">AI 推理过程：</span>
+      <span style="font-size:13px;color:#303133">{{ store.searchReasoning }}</span>
+    </div>
     <div class="tag-filter" style="margin-top:16px">
       <span style="font-size:13px;color:#606266">
-        检索到 {{ store.searchResults.length }} 条 &nbsp;|&nbsp; 余弦相似度排序 &nbsp;|&nbsp; 继续筛选：
+        检索到 {{ store.searchResults.length }} 条 &nbsp;|&nbsp; Agent 语义匹配排序 &nbsp;|&nbsp; 继续筛选：
       </span>
       <el-tag v-for="t in searchResultTags" :key="t"
         :type="searchActiveTags.includes(t)?'':'info'"

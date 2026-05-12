@@ -25,10 +25,14 @@ export interface Asset {
   source: string
   size: string
   format: string
-  clipDesc?: string
-  clipStyle?: string
-  clipColor?: string
-  clipTags?: string[]
+  visionAnalysis?: {
+    provider?: string
+    status?: string
+    model_name?: string
+    prompt?: string
+    summary?: string
+    keywords?: string[]
+  }
   versions: AssetVersion[]
 }
 

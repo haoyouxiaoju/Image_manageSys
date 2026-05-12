@@ -34,7 +34,7 @@ function goDetail(id: number) {
     <StatCard icon="PictureFilled" color="blue"  :num="store.allAssets.length" label="素材总数" />
     <StatCard icon="Plus"          color="green"  :num="store.monthNewCount"    label="本月新增" />
     <StatCard icon="Collection"    color="orange" :num="store.allTags.length"   label="标签数" />
-    <StatCard icon="Cpu"           color="purple" :num="store.clipReadyCount"   label="CLIP已索引" />
+    <StatCard icon="Cpu"           color="purple" :num="store.visionReadyCount"   label="AI已索引" />
   </div>
 
   <!-- 标签筛选 -->

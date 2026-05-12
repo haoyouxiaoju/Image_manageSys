@@ -195,7 +195,7 @@ class VectorSearchService:
             raise ApiError(status_code=503, code="VECTOR_UNAVAILABLE", message=reason)
 
     def _embed_text(self, text: str) -> list[float]:
-        if settings.clip_provider == "mock":
+        if settings.vision_provider == "mock":
             return _deterministic_embedding(text)
         if not settings.dashscope_api_key:
             raise ApiError(

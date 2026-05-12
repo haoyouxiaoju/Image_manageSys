@@ -3,7 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useAssetStore } from '@/stores/assets'
 import { ElMessage } from 'element-plus'
-import { clipApi, type ClipAnalyzeResponse } from '@/api/clip'
+import { visionApi, type VisionAnalyzeResponse } from '@/api/vision'
 
 const auth = useAuthStore()
 const store = useAssetStore()
@@ -205,7 +205,7 @@ interface ZipEntryResult {
   file: File
   preview: string
   status: 'pending' | 'analyzing' | 'done' | 'error'
-  analysis: ClipAnalyzeResponse | null
+  analysis: VisionAnalyzeResponse | null
   editedPrompt: string
   editedKeywords: string[]
   errorMsg: string
@@ -339,7 +339,7 @@ async function runZipAnalysis() {
     try {
       const fd = new FormData()
       fd.append('file', entry.file)
-      const res = await clipApi.analyze(fd)
+      const res = await visionApi.analyze(fd)
       entry.analysis = res.data
       entry.editedPrompt = res.data.prompt
       entry.editedKeywords = [...res.data.keywords]
@@ -375,7 +375,7 @@ async function runAnalysis() {
     const fd = new FormData()
     fd.append('file', entry.file)
 
-    const res = await clipApi.analyze(fd)
+    const res = await visionApi.analyze(fd)
     const data = res.data
 
     entry.provider = data.provider
@@ -411,7 +411,7 @@ async function runAnalysisAll() {
     try {
       const fd = new FormData()
       fd.append('file', entry.file)
-      const res = await clipApi.analyze(fd)
+      const res = await visionApi.analyze(fd)
       entry.provider = res.data.provider
       entry.model = res.data.model
       entry.model_version = res.data.model_version
@@ -457,6 +457,12 @@ async function confirmAndUpload() {
         fd.append('description', entry.editedPrompt)
         if (entry.editedKeywords.length > 0) fd.append('tags', JSON.stringify(entry.editedKeywords))
         fd.append('source', formSource.value)
+        // 传递前端 AI 分析结果，避免后端重复调用 Qwen3-VL
+        if (entry.analysis?.prompt) {
+          fd.append('prompt', entry.analysis.prompt)
+          fd.append('summary', entry.analysis.summary || '')
+          fd.append('keywords', JSON.stringify(entry.analysis.keywords))
+        }
 
         await store.uploadAsset(fd, (e: ProgressEvent) => {
           if (e.total) uploadProgress.value[entry.name] = Math.round((e.loaded / e.total) * 100)
@@ -480,6 +486,12 @@ async function confirmAndUpload() {
         fd.append('description', entry.editedPrompt)
         if (entry.editedKeywords.length > 0) fd.append('tags', JSON.stringify(entry.editedKeywords))
         fd.append('source', formSource.value)
+        // 传递前端 AI 分析结果，避免后端重复调用 Qwen3-VL
+        if (entry.analyzed && entry.prompt) {
+          fd.append('prompt', entry.prompt)
+          fd.append('summary', entry.summary)
+          fd.append('keywords', JSON.stringify(entry.keywords))
+        }
 
         await store.uploadAsset(fd, (e: ProgressEvent) => {
           if (e.total) uploadProgress.value[entry.name] = Math.round((e.loaded / e.total) * 100)

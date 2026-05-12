@@ -3,7 +3,7 @@ from typing import Any
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from app.repositories import asset_repository, clip_repository
+from app.repositories import asset_repository, vision_repository
 from app.services.vector_search_service import vector_search_service
 
 router = APIRouter()
@@ -43,7 +43,7 @@ def _build_asset_payload(row: dict) -> dict[str, Any]:
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
         "download_url": f"/api/v1/assets/{asset_id}/download",
-        "clip_analysis": {
+        "vision_analysis": {
             "provider": row["provider"],
             "status": row["status"],
             "model_name": row["model_name"],
@@ -61,7 +61,7 @@ def _build_asset_payload(row: dict) -> dict[str, Any]:
 
 @router.post("/text", response_model=SearchTextResponse)
 async def search_text(payload: SearchTextRequest) -> SearchTextResponse:
-    rows = clip_repository.list_ready_embeddings_assets()
+    rows = vision_repository.list_ready_embeddings_assets()
     rows_by_asset_id = {int(row["id"]): row for row in rows}
     start = (payload.page - 1) * payload.page_size
     hits, total = vector_search_service.search_assets(

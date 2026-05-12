@@ -1,6 +1,6 @@
 import client from './client'
 
-export interface ClipStatus {
+export interface VisionStatus {
   enabled: boolean
   provider: string
   model_name: string
@@ -10,7 +10,7 @@ export interface ClipStatus {
   last_error: string | null
 }
 
-export interface ClipAnalyzeResponse {
+export interface VisionAnalyzeResponse {
   provider: string
   model: string
   model_version: string
@@ -19,12 +19,12 @@ export interface ClipAnalyzeResponse {
   keywords: string[]
 }
 
-export const clipApi = {
+export const visionApi = {
   getStatus() {
-    return client.get<ClipStatus>('/clip/status')
+    return client.get<VisionStatus>('/vision/status')
   },
   analyze(formData: FormData) {
-    return client.post<ClipAnalyzeResponse>('/clip/analyze', formData, {
+    return client.post<VisionAnalyzeResponse>('/vision/analyze', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 30000,
     })

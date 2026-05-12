@@ -38,7 +38,7 @@ function goLogin() {
   <header class="top-nav">
     <div class="logo">
       <span class="dot"></span>
-      CLIP-Image 素材库
+      Image 素材库
     </div>
     <div class="top-right">
       <el-input

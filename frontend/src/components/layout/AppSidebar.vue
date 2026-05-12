@@ -48,9 +48,9 @@ function onMenuSelect(index: string) {
 
     <div class="sidebar-title">AI 能力</div>
     <el-menu :default-active="currentView" @select="onMenuSelect">
-      <el-menu-item index="clip-info">
+      <el-menu-item index="vision-info">
         <el-icon><Cpu /></el-icon>
-        <span>CLIP 能力说明</span>
+        <span>AI 视觉能力说明</span>
       </el-menu-item>
     </el-menu>
 

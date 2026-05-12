@@ -10,8 +10,8 @@ from pydantic import BaseModel, Field
 from app.core.auth_context import get_current_user
 from app.core.config import settings
 from app.core.exceptions import ApiError
-from app.repositories import asset_repository, audit_repository, clip_repository
-from app.services.clip_service import clip_service
+from app.repositories import asset_repository, audit_repository, vision_repository
+from app.services.vision_service import vision_service
 from app.services.vector_search_service import vector_search_service
 
 router = APIRouter()
@@ -33,7 +33,7 @@ class AssetVersionResponse(BaseModel):
     created_at: str
 
 
-class ClipAnalysisResponse(BaseModel):
+class VisionAnalysisResponse(BaseModel):
     provider: str | None = None
     status: str
     model_name: str | None = None
@@ -65,7 +65,7 @@ class AssetResponse(BaseModel):
     updated_at: str
     file_url: str
     download_url: str
-    clip_analysis: ClipAnalysisResponse | None = None
+    vision_analysis: VisionAnalysisResponse | None = None
 
 
 class AssetListResponse(BaseModel):
@@ -82,11 +82,11 @@ class AssetUpdateRequest(BaseModel):
     tags: list[str] | None = None
 
 
-def _to_clip_analysis_response(data: dict | None, include_embedding: bool) -> ClipAnalysisResponse | None:
+def _to_vision_analysis_response(data: dict | None, include_embedding: bool) -> VisionAnalysisResponse | None:
     if data is None:
         return None
     embedding = data["embedding"] if include_embedding else None
-    return ClipAnalysisResponse(
+    return VisionAnalysisResponse(
         provider=data["provider"],
         status=data["status"],
         model_name=data["model_name"],
@@ -104,7 +104,7 @@ def _to_clip_analysis_response(data: dict | None, include_embedding: bool) -> Cl
     )
 
 
-def _to_asset_response(asset: dict, include_clip_embedding: bool = False) -> AssetResponse:
+def _to_asset_response(asset: dict, include_vision_embedding: bool = False) -> AssetResponse:
     tags = asset_repository.list_asset_tag_names(asset["id"])
     versions = [
         AssetVersionResponse(
@@ -120,7 +120,7 @@ def _to_asset_response(asset: dict, include_clip_embedding: bool = False) -> Ass
         )
         for item in asset_repository.list_asset_versions(asset["id"])
     ]
-    clip_analysis = clip_repository.get_clip_analysis(asset["id"])
+    vision_analysis = vision_repository.get_vision_analysis(asset["id"])
     return AssetResponse(
         id=asset["id"],
         name=asset["name"],
@@ -136,7 +136,7 @@ def _to_asset_response(asset: dict, include_clip_embedding: bool = False) -> Ass
         updated_at=asset["updated_at"],
         file_url=f"/files/{Path(asset['file_path']).name}",
         download_url=f"/api/v1/assets/{asset['id']}/download",
-        clip_analysis=_to_clip_analysis_response(clip_analysis, include_embedding=include_clip_embedding),
+        vision_analysis=_to_vision_analysis_response(vision_analysis, include_embedding=include_vision_embedding),
     )
 
 
@@ -174,8 +174,8 @@ def _parse_tags(tags_raw: str | None) -> list[str]:
     return [item.strip() for item in tags_raw.split(",") if item.strip()]
 
 
-def _persist_clip_analysis_success(asset_id: int, analysis: Any) -> None:
-    clip_repository.upsert_clip_analysis(
+def _persist_vision_analysis_success(asset_id: int, analysis: Any) -> None:
+    vision_repository.upsert_vision_analysis(
         asset_id=asset_id,
         status="ready",
         provider=analysis.provider,
@@ -196,20 +196,48 @@ def _persist_clip_analysis_success(asset_id: int, analysis: Any) -> None:
     )
 
 
-def _persist_clip_analysis_failure(asset_id: int, message: str) -> None:
-    clip_status = clip_service.status()
-    clip_repository.upsert_clip_analysis(
+def _persist_vision_analysis_failure(asset_id: int, message: str) -> None:
+    vision_status = vision_service.status()
+    vision_repository.upsert_vision_analysis(
         asset_id=asset_id,
         status="failed",
-        provider=clip_status["provider"],
-        model_name=clip_status["model_name"],
-        model_version=clip_status["model_version"],
+        provider=vision_status["provider"],
+        model_name=vision_status["model_name"],
+        model_version=vision_status["model_version"],
         embedding=None,
         features=None,
         generated_prompt=None,
         suggested_description=None,
         suggested_tags=None,
         error_message=message,
+    )
+
+
+def _persist_vision_analysis_from_frontend(
+    asset_id: int,
+    prompt: str,
+    summary: str,
+    keywords: list[str],
+) -> None:
+    vision_status = vision_service.status()
+    vision_repository.upsert_vision_analysis(
+        asset_id=asset_id,
+        status="ready",
+        provider=vision_status.get("provider", "frontend"),
+        model_name=vision_status.get("model_name", ""),
+        model_version=vision_status.get("model_version", ""),
+        embedding=None,
+        features={"strategy": "frontend-provided"},
+        generated_prompt=prompt,
+        suggested_description=summary,
+        suggested_tags=keywords,
+        error_message=None,
+    )
+    vector_search_service.index_asset_prompt(
+        asset_id=asset_id,
+        prompt=prompt,
+        summary=summary,
+        keywords=keywords,
     )
 
 
@@ -221,6 +249,9 @@ async def upload_asset(
     description: str | None = Form(default=""),
     source: str | None = Form(default=""),
     tags: str | None = Form(default=None),
+    prompt: str | None = Form(default=None),
+    summary: str | None = Form(default=None),
+    keywords: str | None = Form(default=None),
 ) -> AssetResponse:
     user = get_current_user(request, required=True)
     _ensure_editor_or_admin(user)
@@ -261,11 +292,22 @@ async def upload_asset(
         asset_repository.replace_asset_tags(created_asset["id"], parsed_tags)
 
     try:
-        clip_result = clip_service.analyze_file(stored_file_path)
-        _persist_clip_analysis_success(created_asset["id"], clip_result)
+        if prompt and summary and keywords:
+            parsed_keywords = json.loads(keywords) if isinstance(keywords, str) else keywords
+            if not isinstance(parsed_keywords, list):
+                parsed_keywords = [str(parsed_keywords)]
+            _persist_vision_analysis_from_frontend(
+                created_asset["id"],
+                prompt=prompt,
+                summary=summary,
+                keywords=parsed_keywords,
+            )
+        else:
+            vision_result = vision_service.analyze_file(stored_file_path)
+            _persist_vision_analysis_success(created_asset["id"], vision_result)
     except ApiError as exc:
-        _persist_clip_analysis_failure(created_asset["id"], exc.message)
-        if settings.clip_required_on_upload:
+        _persist_vision_analysis_failure(created_asset["id"], exc.message)
+        if settings.vision_required_on_upload:
             asset_repository.delete_asset(created_asset["id"])
             if stored_file_path.exists():
                 stored_file_path.unlink()
@@ -302,7 +344,7 @@ async def list_assets(
         total=result["total"],
         page=page,
         page_size=page_size,
-        items=[_to_asset_response(item, include_clip_embedding=False) for item in result["items"]],
+        items=[_to_asset_response(item, include_vision_embedding=False) for item in result["items"]],
     )
 
 
@@ -311,7 +353,7 @@ async def get_asset(asset_id: int) -> AssetResponse:
     asset = asset_repository.get_asset_by_id(asset_id)
     if asset is None:
         raise ApiError(status_code=404, code="ASSET_NOT_FOUND", message="Asset does not exist.")
-    return _to_asset_response(asset, include_clip_embedding=False)
+    return _to_asset_response(asset, include_vision_embedding=False)
 
 
 @router.put("/{asset_id}", response_model=AssetResponse)
@@ -339,7 +381,7 @@ async def update_asset(asset_id: int, payload: AssetUpdateRequest, request: Requ
         target=updated_asset["name"],
         ip_address=_client_ip(request),
     )
-    return _to_asset_response(updated_asset, include_clip_embedding=False)
+    return _to_asset_response(updated_asset, include_vision_embedding=False)
 
 
 @router.delete("/{asset_id}")

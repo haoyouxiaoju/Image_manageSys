@@ -144,12 +144,15 @@ def init_database() -> None:
             """
         )
 
+        # Migration: rename legacy asset_clip_analysis → asset_vision_analysis
+        _migrate_clip_to_vision(conn)
+
         conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS asset_clip_analysis (
+            CREATE TABLE IF NOT EXISTS asset_vision_analysis (
                 asset_id INTEGER PRIMARY KEY,
                 status TEXT NOT NULL,
-                provider TEXT NOT NULL DEFAULT 'chinese_clip',
+                provider TEXT NOT NULL DEFAULT 'qwen3_vl',
                 model_name TEXT,
                 model_version TEXT,
                 embedding_json TEXT,
@@ -164,10 +167,18 @@ def init_database() -> None:
             )
             """
         )
-        clip_columns = {row["name"] for row in conn.execute("PRAGMA table_info(asset_clip_analysis)").fetchall()}
-        if "provider" not in clip_columns:
-            conn.execute("ALTER TABLE asset_clip_analysis ADD COLUMN provider TEXT NOT NULL DEFAULT 'chinese_clip'")
-        if "generated_prompt" not in clip_columns:
-            conn.execute("ALTER TABLE asset_clip_analysis ADD COLUMN generated_prompt TEXT")
+        vision_columns = {row["name"] for row in conn.execute("PRAGMA table_info(asset_vision_analysis)").fetchall()}
+        if "generated_prompt" not in vision_columns:
+            conn.execute("ALTER TABLE asset_vision_analysis ADD COLUMN generated_prompt TEXT")
         conn.commit()
 
+
+def _migrate_clip_to_vision(conn: sqlite3.Connection) -> None:
+    """Rename legacy asset_clip_analysis table to asset_vision_analysis if it exists."""
+    tables = {row["name"] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+    if "asset_clip_analysis" not in tables:
+        return
+    if "asset_vision_analysis" in tables:
+        return  # already migrated or both exist, skip
+    conn.execute("ALTER TABLE asset_clip_analysis RENAME TO asset_vision_analysis")
+    conn.commit()

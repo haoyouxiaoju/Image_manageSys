@@ -2,13 +2,14 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { assetsApi, type BackendAsset } from '@/api/assets'
-import { searchApi } from '@/api/search'
+import { agentApi } from '@/api/agent'
 import type { Asset, AssetVersion, Collection, SearchResult } from '@/types'
 
 // ===== 后端数据 → 前端 Asset 映射 =====
 function mapAsset(b: BackendAsset): Asset {
   const ext = b.mime_type.split('/')[1]?.toUpperCase() || 'UNKNOWN'
   const sizeMB = b.file_size / 1024 / 1024
+  const va = (b as any).vision_analysis
   return {
     id: b.id,
     name: b.name,
@@ -22,6 +23,14 @@ function mapAsset(b: BackendAsset): Asset {
     tags: b.tags || [],
     versions: b.versions || [],
     downloadUrl: b.download_url,
+    visionAnalysis: va ? {
+      provider: va.provider,
+      status: va.status,
+      model_name: va.model_name,
+      prompt: va.prompt,
+      summary: va.summary,
+      keywords: va.keywords,
+    } : undefined,
   }
 }
 
@@ -58,6 +67,7 @@ export const useAssetStore = defineStore('assets', () => {
   const searchResults = ref<SearchResult[]>([])
   const searchQuery = ref('')
   const searching = ref(false)
+  const searchReasoning = ref('')
 
   // ---- 计算属性 ----
   const filteredAssets = computed(() => {
@@ -85,7 +95,7 @@ export const useAssetStore = defineStore('assets', () => {
     }).length
   })
 
-  const clipReadyCount = computed(() => allAssets.value.filter(a => a.clipDesc).length)
+  const visionReadyCount = computed(() => allAssets.value.filter(a => a.visionAnalysis?.status === 'ready').length)
 
   // ===== ★ API 方法 =====
 
@@ -221,21 +231,24 @@ export const useAssetStore = defineStore('assets', () => {
     collections.value = collections.value.filter(c => c.id !== id)
   }
 
-  // 真实语义搜索（调用 POST /api/v1/search/text）
+  // Agent 语义搜索（调用 POST /api/v1/agent/search）
   async function doSearch(query: string) {
     if (!query.trim()) return
     searchQuery.value = query
     searching.value = true
+    searchReasoning.value = ''
     try {
-      const res = await searchApi.searchText({ query, page: 1, page_size: 50 })
+      const res = await agentApi.search({ query, page: 1, page_size: 50 })
       searchResults.value = res.data.items.map(item => ({
         ...mapAsset(item.asset),
         score: Math.round(item.score * 100),
-        matchReasons: [`余弦相似度 ${(item.score * 100).toFixed(1)}%`],
+        matchReasons: item.match_reasons || [],
       }))
+      searchReasoning.value = res.data.reasoning || ''
     } catch (e: any) {
       ElMessage.error('搜索失败：' + (e?.response?.data?.detail || e?.message || '未知错误'))
       searchResults.value = []
+      searchReasoning.value = ''
     } finally {
       searching.value = false
     }
@@ -244,8 +257,8 @@ export const useAssetStore = defineStore('assets', () => {
   return {
     allAssets, totalCount, loading, error, allTags, collections,
     selectedTags, globalSearch, pageSize, currentPage,
-    searchResults, searchQuery, searching,
-    filteredAssets, pagedAssets, monthNewCount, clipReadyCount,
+    searchResults, searchQuery, searching, searchReasoning,
+    filteredAssets, pagedAssets, monthNewCount, visionReadyCount,
     fetchAssets, fetchAssetById, getAssetById, updateAsset, deleteAsset, uploadAsset,
     addAsset, addAssetTag, removeAssetTag, addVersion, toggleTag, clearFilters,
     getCollectionById, getCollectionAssets, createCollection, addToCollection, removeFromCollection, deleteCollection,

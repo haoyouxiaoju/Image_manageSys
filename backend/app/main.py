@@ -10,16 +10,18 @@ from app.core.database import init_database
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import register_middleware
-from app.repositories import clip_repository
-from app.services.clip_service import clip_service
+from app.repositories import vision_repository
+from app.services.agent_service import agent_service
+from app.services.vision_service import vision_service
 from app.services.vector_search_service import vector_search_service
 
 configure_logging()
 init_database()
-clip_service.initialize()
+vision_service.initialize()
 vector_search_service.initialize()
+agent_service.initialize()
 if vector_search_service.status()["ready"]:
-    for item in clip_repository.list_ready_embeddings_assets():
+    for item in vision_repository.list_ready_embeddings_assets():
         prompt = (item.get("generated_prompt") or item.get("suggested_description") or "").strip()
         if not prompt:
             continue
@@ -34,10 +36,11 @@ if vector_search_service.status()["ready"]:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_database()
-    clip_service.initialize()
+    vision_service.initialize()
     vector_search_service.initialize()
+    agent_service.initialize()
     if vector_search_service.status()["ready"]:
-        for item in clip_repository.list_ready_embeddings_assets():
+        for item in vision_repository.list_ready_embeddings_assets():
             prompt = (item.get("generated_prompt") or item.get("suggested_description") or "").strip()
             if not prompt:
                 continue
