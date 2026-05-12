@@ -34,17 +34,6 @@ function mapAsset(b: BackendAsset): Asset {
   }
 }
 
-// ===== Mock 数据（仅标签/分组/搜索/版本，后端未就绪） =====
-const mockTags = ['科技感','产品图','海报','UI设计','年会活动','人物','自然风景','城市建筑','动物','食物饮品','交通工具','家居生活']
-const mockCollections: Collection[] = [
-  { id:1, name:'2026春季新品素材',   desc:'春季新品发布的全部视觉物料',                 assetIds:[7,3],                      created:'2026-03-20', creator:'小明' },
-  { id:2, name:'年会活动合集',       desc:'年会合影、庆典物料统一管理',                 assetIds:[2,13],                     created:'2026-01-10', creator:'小红' },
-  { id:3, name:'UI设计稿归档',       desc:'App和后台管理系统的设计稿',                   assetIds:[5,9,12,15],                created:'2026-02-05', creator:'设计部' },
-  { id:4, name:'电商营销海报',       desc:'促销和营销相关海报素材',                      assetIds:[4,7,10],                   created:'2026-03-01', creator:'运营部' },
-  { id:5, name:'宠物摄影',            desc:'猫狗宠物相关摄影素材',                        assetIds:[17,18],                    created:'2026-05-01', creator:'小明' },
-  { id:6, name:'风光与建筑摄影',     desc:'自然风光和城市建筑摄影合集',                  assetIds:[8,11,14],                  created:'2026-02-15', creator:'小明' },
-]
-
 // ===== Store =====
 export const useAssetStore = defineStore('assets', () => {
   // ---- 素材数据（从 API 加载） ----
@@ -53,9 +42,9 @@ export const useAssetStore = defineStore('assets', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  // ---- Mock 数据（后端未就绪的模块） ----
-  const allTags = ref<string[]>([...mockTags])
-  const collections = ref<Collection[]>([...mockCollections])
+  // ---- 标签 & 分组 ----
+  const allTags = ref<string[]>([])
+  const collections = ref<Collection[]>([])
 
   // ---- 筛选 & 分页 ----
   const selectedTags = ref<string[]>([])
@@ -63,7 +52,7 @@ export const useAssetStore = defineStore('assets', () => {
   const pageSize = 10
   const currentPage = ref(1)
 
-  // ---- 搜索（本地模拟，后端搜索端点未就绪） ----
+  // ---- 搜索 ----
   const searchResults = ref<SearchResult[]>([])
   const searchQuery = ref('')
   const searching = ref(false)
@@ -113,10 +102,6 @@ export const useAssetStore = defineStore('assets', () => {
       totalCount.value = res.data.total
     } catch (e: any) {
       error.value = e?.response?.data?.error?.message || e?.message || '加载素材失败'
-      if (allAssets.value.length === 0) {
-        // 首次加载失败时，回退到 mock 数据确保页面可用
-        console.warn('API 不可用，回退到 mock 数据')
-      }
     } finally {
       loading.value = false
     }
@@ -164,12 +149,6 @@ export const useAssetStore = defineStore('assets', () => {
     const asset = mapAsset(res.data)
     allAssets.value.unshift(asset)
     return asset
-  }
-
-  // ===== ★ Mock 方法（后端未就绪的模块，保持原有逻辑） =====
-
-  function addAsset(asset: Asset) {
-    allAssets.value.unshift(asset)
   }
 
   function addAssetTag(assetId: number, tag: string) {
@@ -260,7 +239,7 @@ export const useAssetStore = defineStore('assets', () => {
     searchResults, searchQuery, searching, searchReasoning,
     filteredAssets, pagedAssets, monthNewCount, visionReadyCount,
     fetchAssets, fetchAssetById, getAssetById, updateAsset, deleteAsset, uploadAsset,
-    addAsset, addAssetTag, removeAssetTag, addVersion, toggleTag, clearFilters,
+    addAssetTag, removeAssetTag, addVersion, toggleTag, clearFilters,
     getCollectionById, getCollectionAssets, createCollection, addToCollection, removeFromCollection, deleteCollection,
     doSearch,
   }

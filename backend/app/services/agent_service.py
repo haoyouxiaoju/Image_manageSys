@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from time import perf_counter
 from typing import Any
 
 from openai import OpenAI
@@ -13,71 +14,38 @@ from app.services.vector_search_service import vector_search_service
 
 logger = logging.getLogger(__name__)
 
-_TOOL_SCHEMAS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "vector_search",
-            "description": "语义搜索图片素材库，输入中文或英文描述返回匹配的素材列表。可以多次调用，从不同角度进行检索（如 '现代办公室' 可分别搜 '现代办公空间'、'minimalist office'、'coworking space'）。",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "搜索查询词，中文或英文描述",
-                    },
-                    "limit": {
-                        "type": "integer",
-                        "description": "返回结果数量上限",
-                        "default": 10,
-                    },
-                    "offset": {
-                        "type": "integer",
-                        "description": "分页偏移量",
-                        "default": 0,
-                    },
-                },
-                "required": ["query"],
-            },
-        },
-    },
-]
-
 _SYSTEM_PROMPT = """# 角色
-你是企业数字资产库的智能检索引擎。用户用自然语言描述需要的图片素材，你理解意图后进行语义检索。
+你是企业数字资产库的智能检索助手。系统已完成语义向量搜索，你的任务是为候选结果评分并生成匹配理由。
 
-# 可用工具
-vector_search 返回的每条结果包含：
-- asset_id: 素材ID
-- score: 余弦相似度（0~1）
-- prompt: 图片的可复现提示词（描述主体、场景、构图、光影、风格、色调）
-- summary: 20-40字的画面核心内容
-- keywords: 实体名词和风格标签列表
+# 输入格式
+系统提供每条结果的 asset_id 和 summary（20-40字画面核心描述）。
 
-# 工作流程
-1. 分析用户意图，提取核心检索概念
-2. 调用 vector_search 工具进行搜索。如果用户需求涉及多个角度，分别用不同查询词调用多次（如 "找现代办公室风格的图" → 分别搜 "现代办公空间"、"minimalist office"、"coworking space"）
-3. **阅读返回结果中的 prompt/summary/keywords**，判断是否匹配用户意图。如果不够好，调整查询词再搜
-4. 汇总所有结果，去重，**基于实际的 prompt 和 summary 内容**为每张图生成中文匹配理由
-
-# 最终输出格式
-严格输出 JSON 对象，不要包含 markdown 代码块或额外文字：
+# 输出格式（严格 JSON，无 markdown 包裹）
 {
   "results": [
     {
       "asset_id": 1,
-      "match_reason": "可复现提示词中的蓝色科技感背景与查询高度吻合，画面包含代码界面和现代办公风格"
+      "relevance": 0.92,
+      "match_reason": "画面中蓝色科技感背景与查询高度吻合，包含代码界面和现代办公风格"
     }
   ],
-  "summary": "本次检索的推理过程简要说明"
+  "summary": "检索策略简述，20字以内"
 }
 
+# relevance 打分规则
+- 0.9-1.0: 高度匹配，画面主体与查询完全一致
+- 0.7-0.9: 较好匹配，画面主体相关但存在部分差异
+- 0.5-0.7: 部分匹配，相关元素但整体偏差较大
+- 0.3-0.5: 弱匹配，仅边缘相关
+- <0.3: 不相关，过滤掉
+
+关注用户查询中的细化限定词（如"炸"vs"清汤"、"现代"vs"古典"），根据 summary 具体描述严格区分。
+
 # 规则
-- asset_id 必须是 vector_search 返回的实际 ID，不要编造
-- match_reason 必须基于返回结果中的 prompt/summary/keywords 实际内容生成，不能凭空编造
-- summary 简要说明你的检索策略和判断过程，50字以内
-- 如果 vector_search 返回空结果，尝试换个角度重新搜索，不要直接放弃
-- 优先返回 score > 0.5 的结果，明显不相关的可以过滤掉
+- asset_id 必须使用输入中给出的 ID
+- match_reason 基于 summary 实际内容生成（15-30字），不编造
+- 过滤 relevance < 0.3 的明显不相关结果
+- 每条结果一条记录，不要重复
 """
 
 
@@ -125,105 +93,111 @@ class AgentService:
         query: str,
         page: int = 1,
         page_size: int = 10,
+        reason_top_n: int = 5,
     ) -> dict[str, Any]:
+        t_total = perf_counter()
         self._ensure_ready()
 
         normalized_query = query.strip()
         if not normalized_query:
             raise ApiError(status_code=400, code="EMPTY_QUERY", message="Search query cannot be empty.")
 
-        messages: list[dict[str, Any]] = [
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user", "content": normalized_query},
-        ]
+        # Step 1: Direct vector search (cosine similarity, fast)
+        t_vs = perf_counter()
+        hits, vs_total = vector_search_service.search_assets(
+            query=normalized_query,
+            limit=page_size,
+            offset=(page - 1) * page_size,
+        )
+        t_vs_elapsed = (perf_counter() - t_vs) * 1000
+        logger.info("[agent-search] vector_search query=%r hits=%d total=%d elapsed=%.0fms",
+                     normalized_query, len(hits), vs_total, t_vs_elapsed)
 
-        max_calls = settings.agent_max_tool_calls
+        if not hits:
+            return {"items": [], "reasoning": "未找到匹配的图片素材。"}
+
+        # 过滤低分噪声：余弦相似度低于阈值的结果直接丢弃
+        min_score = settings.agent_min_score
+        filtered = [h for h in hits if h.score >= min_score]
+        if not filtered:
+            filtered = hits[:1]  # 兜底：至少保留最相关的一条
+        logger.info("[agent-search] filtered min_score=%.2f before=%d after=%d",
+                     min_score, len(hits), len(filtered))
+
+        # Step 2: LLM scores and writes match_reasons for top-N only
+        top_for_llm = filtered[:reason_top_n]
+        llm_reasons: dict[int, str] = {}
+        llm_scores: dict[int, float] = {}
         reasoning_summary = ""
-        final_results: list[dict[str, Any]] = []
 
-        for _ in range(max_calls):
-            response = self._client.chat.completions.create(
-                model=settings.agent_chat_model,
-                messages=messages,
-                tools=_TOOL_SCHEMAS,
-                temperature=0.3,
-            )
+        if hits:
+            t_llm = perf_counter()
+            try:
+                llm_reasons, llm_scores, reasoning_summary = self._generate_reasons(normalized_query, top_for_llm)
+                t_llm_elapsed = (perf_counter() - t_llm) * 1000
+                logger.info("[agent-search] llm_reasons count=%d elapsed=%.0fms",
+                            len(llm_reasons), t_llm_elapsed)
+            except Exception as exc:
+                t_llm_elapsed = (perf_counter() - t_llm) * 1000
+                logger.warning("[agent-search] llm_reasons failed elapsed=%.0fms error=%s", t_llm_elapsed, exc)
 
-            choice = response.choices[0]
-            message = choice.message
+        # Step 3: Merge results — cosine similarity for ranking, LLM relevance as reference
+        items: list[dict[str, Any]] = []
+        for hit in filtered:
+            item = {
+                "asset_id": hit.asset_id,
+                "score": round(hit.score, 4),
+                "llm_relevance": llm_scores.get(hit.asset_id),
+                "match_reason": llm_reasons.get(hit.asset_id, ""),
+            }
+            items.append(item)
 
-            if message.tool_calls:
-                messages.append({
-                    "role": "assistant",
-                    "content": message.content or "",
-                    "tool_calls": [
-                        {
-                            "id": tc.id,
-                            "type": tc.type,
-                            "function": {
-                                "name": tc.function.name,
-                                "arguments": tc.function.arguments,
-                            },
-                        }
-                        for tc in message.tool_calls
-                    ],
-                })
-
-                for tc in message.tool_calls:
-                    if tc.function.name != "vector_search":
-                        continue
-                    try:
-                        args = json.loads(tc.function.arguments)
-                    except json.JSONDecodeError:
-                        args = {}
-
-                    search_query = args.get("query", normalized_query)
-                    limit = args.get("limit", 10)
-                    offset = args.get("offset", 0)
-
-                    try:
-                        hits, _total = vector_search_service.search_assets(
-                            query=search_query,
-                            limit=limit,
-                            offset=offset,
-                        )
-                        tool_result = {
-                            "query": search_query,
-                            "results": [
-                                {
-                                    "asset_id": hit.asset_id,
-                                    "score": round(hit.score, 6),
-                                    "prompt": hit.prompt,
-                                    "summary": hit.summary,
-                                    "keywords": hit.keywords or [],
-                                }
-                                for hit in hits
-                            ],
-                        }
-                    except ApiError as exc:
-                        tool_result = {"error": exc.message}
-
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tc.id,
-                        "content": json.dumps(tool_result, ensure_ascii=False),
-                    })
-            else:
-                # LLM returned final text response
-                final_text = message.content or ""
-                parsed = self._parse_agent_response(final_text)
-                final_results = parsed.get("results", [])
-                reasoning_summary = parsed.get("summary", "")
-                break
-
-        if not final_results:
-            # If agent didn't produce a structured response, try to parse from last message
-            reasoning_summary = "Agent 未返回结构化结果，请尝试更精确的描述。"
+        t_total_elapsed = (perf_counter() - t_total) * 1000
+        logger.info("[agent-search] DONE query=%r results=%d vs=%.0fms total=%.0fms",
+                     normalized_query, len(items), t_vs_elapsed, t_total_elapsed)
 
         return {
-            "items": final_results,
+            "items": items,
             "reasoning": reasoning_summary,
         }
+
+    def _generate_reasons(
+        self,
+        query: str,
+        hits: list,
+    ) -> tuple[dict[int, str], dict[int, float], str]:
+        """Ask LLM to score and write match_reasons for top results."""
+        results_text = "\n".join(
+            f"  {h.asset_id}: {h.summary}" for h in hits
+        )
+        user_message = f"查询：{query}\n\n搜索结果：\n{results_text}"
+
+        messages: list[dict[str, Any]] = [
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user", "content": user_message},
+        ]
+
+        response = self._client.chat.completions.create(
+            model=settings.agent_chat_model,
+            messages=messages,
+            temperature=0.3,
+            max_tokens=1024,
+        )
+
+        parsed = self._parse_agent_response(response.choices[0].message.content or "")
+        reasons: dict[int, str] = {}
+        llm_scores: dict[int, float] = {}
+        for r in parsed.get("results", []):
+            aid = r.get("asset_id")
+            if aid is None:
+                continue
+            reason = r.get("match_reason", "")
+            relevance = r.get("relevance")
+            if reason:
+                reasons[int(aid)] = reason
+            if relevance is not None and isinstance(relevance, (int, float)):
+                llm_scores[int(aid)] = round(float(relevance), 4)
+        return reasons, llm_scores, parsed.get("summary", "")
 
     def _ensure_ready(self) -> None:
         if not self._enabled:

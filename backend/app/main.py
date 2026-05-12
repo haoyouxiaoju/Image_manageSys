@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -15,22 +16,13 @@ from app.services.agent_service import agent_service
 from app.services.vision_service import vision_service
 from app.services.vector_search_service import vector_search_service
 
+logger = logging.getLogger(__name__)
+
 configure_logging()
 init_database()
 vision_service.initialize()
 vector_search_service.initialize()
 agent_service.initialize()
-if vector_search_service.status()["ready"]:
-    for item in vision_repository.list_ready_embeddings_assets():
-        prompt = (item.get("generated_prompt") or item.get("suggested_description") or "").strip()
-        if not prompt:
-            continue
-        vector_search_service.index_asset_prompt(
-            asset_id=int(item["id"]),
-            prompt=prompt,
-            summary=item.get("suggested_description"),
-            keywords=item.get("suggested_tags") or [],
-        )
 
 
 @asynccontextmanager
@@ -40,16 +32,22 @@ async def lifespan(_: FastAPI):
     vector_search_service.initialize()
     agent_service.initialize()
     if vector_search_service.status()["ready"]:
-        for item in vision_repository.list_ready_embeddings_assets():
-            prompt = (item.get("generated_prompt") or item.get("suggested_description") or "").strip()
-            if not prompt:
-                continue
-            vector_search_service.index_asset_prompt(
-                asset_id=int(item["id"]),
-                prompt=prompt,
-                summary=item.get("suggested_description"),
-                keywords=item.get("suggested_tags") or [],
+        ready_assets = vision_repository.list_ready_embeddings_assets()
+        indexed_count = vector_search_service.count_indexed()
+        if len(ready_assets) != indexed_count:
+            logger.info(
+                "Re-indexing assets: ready=%d indexed=%d", len(ready_assets), indexed_count,
             )
+            for item in ready_assets:
+                prompt = (item.get("generated_prompt") or item.get("suggested_description") or "").strip()
+                if not prompt:
+                    continue
+                vector_search_service.index_asset_prompt(
+                    asset_id=int(item["id"]),
+                    prompt=prompt,
+                    summary=item.get("suggested_description"),
+                    keywords=item.get("suggested_tags") or [],
+                )
     yield
 
 

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from hashlib import sha256
+from functools import lru_cache
 import json
 import logging
 from pathlib import Path
+from time import perf_counter
 from typing import Any
-from urllib import request as urllib_request
 
+from openai import OpenAI
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qdrant
 
@@ -34,6 +35,7 @@ class VectorSearchService:
         self._ready = False
         self._last_error: str | None = None
         self._client: QdrantClient | None = None
+        self._embedding_client: OpenAI | None = None
         self._vector_size: int | None = None
 
     def initialize(self) -> None:
@@ -42,6 +44,7 @@ class VectorSearchService:
         self._last_error = None
         self._vector_size = None
         self._client = None
+        self._embedding_client = None
 
         if not self._enabled:
             logger.info("Vector search disabled by VECTOR_ENABLED.")
@@ -64,6 +67,13 @@ class VectorSearchService:
                 logger.warning("Cannot remove Qdrant lock file (maybe another instance is running): %s", lock_file)
 
         self._client = QdrantClient(path=str(vector_dir))
+        if settings.dashscope_api_key:
+            self._embedding_client = OpenAI(
+                base_url=settings.qwen_base_url,
+                api_key=settings.dashscope_api_key,
+                timeout=30.0,
+                max_retries=1,
+            )
         self._ready = True
         logger.info("Vector search initialized. provider=qdrant path=%s", vector_dir)
 
@@ -117,13 +127,16 @@ class VectorSearchService:
         normalized_query = query.strip()
         if not normalized_query:
             raise ApiError(status_code=400, code="EMPTY_QUERY", message="Search query cannot be empty.")
+        t_embed = perf_counter()
         vector = self._embed_text(normalized_query)
+        t_embed_elapsed = (perf_counter() - t_embed) * 1000
         self._ensure_collection(len(vector))
         query_filter = None
         if asset_ids is not None:
             if not asset_ids:
                 return [], 0
             query_filter = qdrant.Filter(must=[qdrant.HasIdCondition(has_id=asset_ids)])
+        t_qdrant = perf_counter()
         hits = self._client.search(
             collection_name=settings.vector_collection_name,
             query_vector=vector,
@@ -133,11 +146,16 @@ class VectorSearchService:
             with_payload=True,
             with_vectors=False,
         )
+        t_qdrant_elapsed = (perf_counter() - t_qdrant) * 1000
         total = self._client.count(
             collection_name=settings.vector_collection_name,
             count_filter=query_filter,
             exact=True,
         ).count
+        logger.info(
+            "[vector-search] query=%r embed=%.0fms qdrant_search=%.0fms hits=%d total=%d",
+            normalized_query, t_embed_elapsed, t_qdrant_elapsed, len(hits), total,
+        )
         return [
             VectorHit(
                 asset_id=int(hit.id),
@@ -157,6 +175,14 @@ class VectorSearchService:
             points_selector=qdrant.PointIdsList(points=[asset_id]),
             wait=True,
         )
+
+    def count_indexed(self) -> int:
+        if not self._ready or not self._client or not self._collection_exists():
+            return 0
+        return self._client.count(
+            collection_name=settings.vector_collection_name,
+            exact=True,
+        ).count
 
     def clear_index(self) -> None:
         if not self._ready or not self._client:
@@ -207,8 +233,6 @@ class VectorSearchService:
             raise ApiError(status_code=503, code="VECTOR_UNAVAILABLE", message=reason)
 
     def _embed_text(self, text: str) -> list[float]:
-        if settings.vision_provider == "mock":
-            return _deterministic_embedding(text)
         if not settings.dashscope_api_key:
             raise ApiError(
                 status_code=503,
@@ -216,23 +240,18 @@ class VectorSearchService:
                 message="DASHSCOPE_API_KEY is missing, embedding service unavailable.",
             )
 
-        payload = {
-            "model": settings.text_embedding_model,
-            "input": text,
-        }
-        url = settings.qwen_base_url.rstrip("/") + "/embeddings"
-        req = urllib_request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {settings.dashscope_api_key}",
-            },
-            method="POST",
-        )
+        cache_key = _embedding_cache_key(settings.text_embedding_model, text)
+        cached = _embedding_cache().get(cache_key)
+        if cached is not None:
+            logger.info("[embedding] cache_hit model=%s len=%d", settings.text_embedding_model, len(text))
+            return cached
+
         try:
-            with urllib_request.urlopen(req, timeout=60) as resp:
-                raw = json.loads(resp.read().decode("utf-8"))
+            resp = self._embedding_client.embeddings.create(
+                model=settings.text_embedding_model,
+                input=text,
+            )
+            vector = resp.data[0].embedding
         except Exception as exc:
             raise ApiError(
                 status_code=502,
@@ -240,32 +259,28 @@ class VectorSearchService:
                 message=f"Embedding API request failed: {exc}",
             ) from exc
 
-        try:
-            vector = raw["data"][0]["embedding"]
-        except (KeyError, IndexError, TypeError) as exc:
-            raise ApiError(
-                status_code=500,
-                code="EMBEDDING_INVALID_RESPONSE",
-                message="Embedding response format is invalid.",
-            ) from exc
-        if not isinstance(vector, list) or not vector:
-            raise ApiError(status_code=500, code="EMBEDDING_EMPTY", message="Embedding result is empty.")
-        return [float(item) for item in vector]
+        result = [float(item) for item in vector]
+        _embedding_cache()[cache_key] = result
+        logger.info("[embedding] cached model=%s len=%d dim=%d", settings.text_embedding_model, len(text), len(result))
+        return result
 
 
-def _deterministic_embedding(text: str, dim: int = 256) -> list[float]:
-    values = [0.0] * dim
-    digest = sha256(text.strip().lower().encode("utf-8")).digest()
-    if not digest:
-        return values
-    for idx, byte in enumerate(digest * ((dim // len(digest)) + 1)):
-        if idx >= dim:
-            break
-        values[idx] = (byte / 255.0) * 2.0 - 1.0
-    norm = sum(item * item for item in values) ** 0.5
-    if norm == 0:
-        return values
-    return [item / norm for item in values]
+# 进程级 LRU 缓存：相同 query + model → 相同向量，避免重复 API 调用
+_EMBEDDING_CACHE: dict[str, list[float]] = {}
+_EMBEDDING_CACHE_MAX = 512
+
+
+def _embedding_cache_key(model: str, text: str) -> str:
+    return f"{model}::{text.strip()}"
+
+
+def _embedding_cache() -> dict[str, list[float]]:
+    return _EMBEDDING_CACHE
+
+
+def clear_embedding_cache() -> None:
+    _EMBEDDING_CACHE.clear()
+    logger.info("Embedding cache cleared.")
 
 
 vector_search_service = VectorSearchService()

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import logging
+from time import perf_counter
+
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from app.repositories import asset_repository, vision_repository
 from app.services.agent_service import agent_service
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -19,6 +23,7 @@ class AgentSearchResultItem(BaseModel):
     asset: dict
     score: float
     match_reasons: list[str]
+    llm_relevance: float | None = None
 
 
 class AgentSearchResponse(BaseModel):
@@ -31,27 +36,41 @@ class AgentSearchResponse(BaseModel):
 
 @router.post("/search", response_model=AgentSearchResponse)
 async def agent_search(payload: AgentSearchRequest) -> AgentSearchResponse:
+    t_total = perf_counter()
+
+    t_agent = perf_counter()
     agent_result = agent_service.search(
         query=payload.query,
         page=payload.page,
         page_size=payload.page_size,
     )
+    t_agent_elapsed = (perf_counter() - t_agent) * 1000
+    logger.info("[agent-endpoint] agent_service.search elapsed=%.0fms", t_agent_elapsed)
 
-    # Build a lookup of asset_id -> match_reason from agent result
-    match_reason_map: dict[int, str] = {}
+    # Build lookup of asset_id -> (match_reason, score) from agent result
+    result_map: dict[int, dict] = {}
     for item in agent_result.get("items", []):
         aid = item.get("asset_id")
         if aid is not None:
-            match_reason_map[int(aid)] = item.get("match_reason", "")
+            result_map[int(aid)] = {
+                "match_reason": item.get("match_reason", ""),
+                "score": item.get("score", 0.0),
+                "llm_relevance": item.get("llm_relevance"),
+            }
 
     # Fetch asset details for matched asset_ids
-    asset_ids = list(match_reason_map.keys())
+    asset_ids = list(result_map.keys())
     items: list[AgentSearchResultItem] = []
 
     if asset_ids:
+        t_db = perf_counter()
         rows = vision_repository.list_ready_embeddings_assets()
+        t_db_elapsed = (perf_counter() - t_db) * 1000
+        logger.info("[agent-endpoint] vision_repository.list_ready_embeddings_assets elapsed=%.0fms rows=%d",
+                     t_db_elapsed, len(rows))
         rows_by_id: dict[int, dict] = {int(r["id"]): r for r in rows}
 
+        t_detail = perf_counter()
         for aid in asset_ids:
             row = rows_by_id.get(aid)
             if row is None:
@@ -89,11 +108,21 @@ async def agent_search(payload: AgentSearchRequest) -> AgentSearchResponse:
                     "analyzed_at": row.get("analyzed_at"),
                 },
             }
+            info = result_map.get(aid, {})
             items.append(AgentSearchResultItem(
                 asset=asset_payload,
-                score=1.0,  # Agent-determined relevance, not cosine distance
-                match_reasons=[match_reason_map.get(aid, "")],
+                score=info.get("score", 0.0),
+                match_reasons=[info.get("match_reason", "")] if info.get("match_reason") else [],
+                llm_relevance=info.get("llm_relevance"),
             ))
+        # 按向量相似度降序排列
+        items.sort(key=lambda it: it.score, reverse=True)
+        logger.info("[agent-endpoint] build_asset_details count=%d elapsed=%.0fms",
+                     len(items), (perf_counter() - t_detail) * 1000)
+
+    t_total_elapsed = (perf_counter() - t_total) * 1000
+    logger.info("[agent-endpoint] DONE query=%r item_count=%d total=%.0fms",
+                 payload.query, len(items), t_total_elapsed)
 
     return AgentSearchResponse(
         items=items,
