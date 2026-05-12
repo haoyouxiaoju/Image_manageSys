@@ -21,6 +21,9 @@ logger = logging.getLogger(__name__)
 class VectorHit:
     asset_id: int
     score: float
+    prompt: str = ""
+    summary: str = ""
+    keywords: list[str] | None = None
 
 
 class VectorSearchService:
@@ -127,7 +130,7 @@ class VectorSearchService:
             limit=limit,
             offset=offset,
             query_filter=query_filter,
-            with_payload=False,
+            with_payload=True,
             with_vectors=False,
         )
         total = self._client.count(
@@ -135,7 +138,16 @@ class VectorSearchService:
             count_filter=query_filter,
             exact=True,
         ).count
-        return [VectorHit(asset_id=int(hit.id), score=float(hit.score)) for hit in hits], int(total)
+        return [
+            VectorHit(
+                asset_id=int(hit.id),
+                score=float(hit.score),
+                prompt=(hit.payload or {}).get("prompt", ""),
+                summary=(hit.payload or {}).get("summary", ""),
+                keywords=(hit.payload or {}).get("keywords", []),
+            )
+            for hit in hits
+        ], int(total)
 
     def delete_asset(self, asset_id: int) -> None:
         if not self._ready or not self._client:

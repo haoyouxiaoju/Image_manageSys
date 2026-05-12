@@ -46,11 +46,19 @@ _TOOL_SCHEMAS = [
 _SYSTEM_PROMPT = """# 角色
 你是企业数字资产库的智能检索引擎。用户用自然语言描述需要的图片素材，你理解意图后进行语义检索。
 
+# 可用工具
+vector_search 返回的每条结果包含：
+- asset_id: 素材ID
+- score: 余弦相似度（0~1）
+- prompt: 图片的可复现提示词（描述主体、场景、构图、光影、风格、色调）
+- summary: 20-40字的画面核心内容
+- keywords: 实体名词和风格标签列表
+
 # 工作流程
 1. 分析用户意图，提取核心检索概念
 2. 调用 vector_search 工具进行搜索。如果用户需求涉及多个角度，分别用不同查询词调用多次（如 "找现代办公室风格的图" → 分别搜 "现代办公空间"、"minimalist office"、"coworking space"）
-3. 评估返回结果是否满足用户需求，如果结果不够好，调整查询词再搜一轮
-4. 汇总所有结果，去重，为每张匹配的图片生成中文匹配理由（如 "色调是典型的现代明亮办公风格"、"画面包含开放式工位布局"）
+3. **阅读返回结果中的 prompt/summary/keywords**，判断是否匹配用户意图。如果不够好，调整查询词再搜
+4. 汇总所有结果，去重，**基于实际的 prompt 和 summary 内容**为每张图生成中文匹配理由
 
 # 最终输出格式
 严格输出 JSON 对象，不要包含 markdown 代码块或额外文字：
@@ -58,7 +66,7 @@ _SYSTEM_PROMPT = """# 角色
   "results": [
     {
       "asset_id": 1,
-      "match_reason": "画面中的蓝色科技感背景与查询高度吻合"
+      "match_reason": "可复现提示词中的蓝色科技感背景与查询高度吻合，画面包含代码界面和现代办公风格"
     }
   ],
   "summary": "本次检索的推理过程简要说明"
@@ -66,9 +74,10 @@ _SYSTEM_PROMPT = """# 角色
 
 # 规则
 - asset_id 必须是 vector_search 返回的实际 ID，不要编造
-- match_reason 为每张图片生成一条中文匹配理由
+- match_reason 必须基于返回结果中的 prompt/summary/keywords 实际内容生成，不能凭空编造
 - summary 简要说明你的检索策略和判断过程，50字以内
 - 如果 vector_search 返回空结果，尝试换个角度重新搜索，不要直接放弃
+- 优先返回 score > 0.5 的结果，明显不相关的可以过滤掉
 """
 
 
@@ -181,7 +190,13 @@ class AgentService:
                         tool_result = {
                             "query": search_query,
                             "results": [
-                                {"asset_id": hit.asset_id, "score": round(hit.score, 6)}
+                                {
+                                    "asset_id": hit.asset_id,
+                                    "score": round(hit.score, 6),
+                                    "prompt": hit.prompt,
+                                    "summary": hit.summary,
+                                    "keywords": hit.keywords or [],
+                                }
                                 for hit in hits
                             ],
                         }
