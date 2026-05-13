@@ -1,25 +1,29 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useAssetStore } from '@/stores/assets'
 import { ElMessage } from 'element-plus'
 
+const router = useRouter()
 const auth = useAuthStore()
 const store = useAssetStore()
 
 const showDialog = ref(false)
 const newCol = ref({ name: '', desc: '' })
 
-function createCollection() {
+onMounted(() => { store.fetchCollections() })
+
+async function createCollection() {
   if (!newCol.value.name.trim()) { ElMessage.warning('请输入分组名称'); return }
-  store.createCollection(newCol.value.name, newCol.value.desc, auth.user?.username || '未知')
+  await store.createCollection(newCol.value.name, newCol.value.desc)
   ElMessage.success('分组已创建')
   showDialog.value = false
   newCol.value = { name: '', desc: '' }
 }
 
-function viewCollection(c: { id: number; name: string; assetIds: number[] }) {
-  ElMessage.info(`打开分组：${c.name}（含 ${c.assetIds.length} 项素材）`)
+function viewCollection(c: { id: number }) {
+  router.push(`/collection/${c.id}`)
 }
 </script>
 
@@ -33,9 +37,9 @@ function viewCollection(c: { id: number; name: string; assetIds: number[] }) {
     <div v-for="c in store.collections" :key="c.id" class="collection-card" @click="viewCollection(c)">
       <div class="col-header">
         <span class="col-name">{{ c.name }}</span>
-        <el-tag size="small">{{ c.assetIds.length }} 项</el-tag>
+        <el-tag size="small">{{ c.asset_count }} 项</el-tag>
       </div>
-      <div class="col-desc">{{ c.desc }}</div>
+      <div class="col-desc">{{ c.description }}</div>
       <div class="col-thumbs">
         <img
           v-for="a in store.getCollectionAssets(c).slice(0, 4)"
@@ -43,7 +47,7 @@ function viewCollection(c: { id: number; name: string; assetIds: number[] }) {
           :src="a.thumb"
         >
       </div>
-      <div class="col-meta">创建于 {{ c.created }} · {{ c.creator }}</div>
+      <div class="col-meta">创建于 {{ c.created_at?.substring(0, 10) }} · {{ c.creator }}</div>
     </div>
   </div>
   <el-empty v-if="store.collections.length === 0" description="暂无分组" />

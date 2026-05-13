@@ -155,7 +155,7 @@ function submitVersion() {
 
 <template>
   <LoadingSkeleton v-if="detailLoading" type="detail" />
-  <div v-else-if="asset" style="max-width:720px">
+  <div v-else-if="asset" class="asset-detail">
     <el-button :icon="ArrowLeft" @click="router.back()" style="margin-bottom:16px">返回</el-button>
 
     <img :src="asset.thumb" class="drawer-image">

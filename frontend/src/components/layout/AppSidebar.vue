@@ -40,10 +40,6 @@ function onMenuSelect(index: string) {
         <el-icon><UploadFilled /></el-icon>
         <span>上传素材</span>
       </el-menu-item>
-      <el-menu-item index="share-manage" :disabled="auth.isGuest">
-        <el-icon><Share /></el-icon>
-        <span>分享管理</span>
-      </el-menu-item>
     </el-menu>
 
     <div class="sidebar-title">AI 能力</div>
@@ -54,14 +50,5 @@ function onMenuSelect(index: string) {
       </el-menu-item>
     </el-menu>
 
-    <template v-if="auth.isAdmin">
-      <div class="sidebar-title">管理</div>
-      <el-menu :default-active="currentView" @select="onMenuSelect">
-        <el-menu-item index="audit">
-          <el-icon><Document /></el-icon>
-          <span>审计日志</span>
-        </el-menu-item>
-      </el-menu>
-    </template>
   </aside>
 </template>

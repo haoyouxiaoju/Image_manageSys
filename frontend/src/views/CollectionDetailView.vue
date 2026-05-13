@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAssetStore } from '@/stores/assets'
 import { useAuthStore } from '@/stores/auth'
+import { collectionsApi } from '@/api/collections'
 import { ElMessage } from 'element-plus'
 import type { Asset, Collection } from '@/types'
 
@@ -12,24 +13,52 @@ const store = useAssetStore()
 const auth = useAuthStore()
 
 const collection = ref<Collection | undefined>(undefined)
-const assets = ref<Asset[]>([])
 const sortBy = ref<'date_desc' | 'date_asc' | 'name'>('date_desc')
 const filterTag = ref('')
+const detailLoading = ref(false)
 
-function refreshAssets() {
-  if (collection.value) {
-    assets.value = store.getCollectionAssets(collection.value)
+onMounted(async () => {
+  detailLoading.value = true
+  try {
+    const res = await collectionsApi.get(Number(route.params.id))
+    const b = res.data
+    collection.value = {
+      id: b.id, name: b.name, description: b.description,
+      asset_count: b.asset_count,
+      assets: b.assets.map((a: any) => {
+        const ext = a.mime_type?.split('/')[1]?.toUpperCase() || 'UNKNOWN'
+        const sizeMB = (a.file_size || 0) / 1024 / 1024
+        return {
+          id: a.id, name: a.name, desc: a.description || '',
+          source: a.source || '', author: a.uploaded_by,
+          date: a.created_at?.substring(0, 10) || '',
+          size: sizeMB >= 1 ? sizeMB.toFixed(1) + ' MB' : ((a.file_size || 0) / 1024).toFixed(0) + ' KB',
+          format: ext,
+          thumb: a.file_url || a.download_url || '',
+          tags: a.tags || [],
+          versions: a.versions || [],
+          downloadUrl: a.download_url,
+          visionAnalysis: a.vision_analysis ? {
+            provider: a.vision_analysis.provider,
+            status: a.vision_analysis.status,
+            prompt: a.vision_analysis.prompt,
+            summary: a.vision_analysis.summary,
+            keywords: a.vision_analysis.keywords,
+          } : undefined,
+        }
+      }),
+      creator: b.creator, created_at: b.created_at,
+    }
+  } finally {
+    detailLoading.value = false
   }
-}
-
-onMounted(() => {
-  collection.value = store.getCollectionById(Number(route.params.id))
-  refreshAssets()
 })
+
+const assets = computed(() => collection.value?.assets || [])
 
 const allTags = computed(() => {
   const s = new Set<string>()
-  assets.value.forEach(a => a.tags.forEach(t => s.add(t)))
+  assets.value.forEach(a => a.tags.forEach((t: string) => s.add(t)))
   return [...s]
 })
 
@@ -52,15 +81,14 @@ function goDetail(id: number) {
   router.push(`/asset/${id}`)
 }
 
-// #2: 添加/移除素材
+// 添加/移除素材
 const showAddDialog = ref(false)
 const assetSearch = ref('')
 const selectedAssetIds = ref<number[]>([])
 
-// 可选素材：不在当前分组中的
+const existingIds = computed(() => new Set(assets.value.map((a: Asset) => a.id)))
 const availableAssets = computed(() => {
-  const existingIds = collection.value?.assetIds || []
-  let arr = store.allAssets.filter(a => !existingIds.includes(a.id))
+  let arr = store.allAssets.filter(a => !existingIds.value.has(a.id))
   if (assetSearch.value) {
     const q = assetSearch.value.toLowerCase()
     arr = arr.filter(a => a.name.toLowerCase().includes(q))
@@ -74,23 +102,41 @@ function openAddDialog() {
   showAddDialog.value = true
 }
 
-function confirmAddAssets() {
+async function confirmAddAssets() {
   if (!collection.value || selectedAssetIds.value.length === 0) {
     ElMessage.warning('请选择要添加的素材')
     return
   }
-  selectedAssetIds.value.forEach(id => {
-    store.addToCollection(collection.value!.id, id)
+  for (const id of selectedAssetIds.value) {
+    await store.addToCollection(collection.value!.id, id)
+  }
+  // 重新加载详情
+  const res = await collectionsApi.get(collection.value.id)
+  collection.value.asset_count = res.data.asset_count
+  collection.value.assets = res.data.assets.map((a: any) => {
+    const ext = a.mime_type?.split('/')[1]?.toUpperCase() || 'UNKNOWN'
+    const sizeMB = (a.file_size || 0) / 1024 / 1024
+    return {
+      id: a.id, name: a.name, desc: a.description || '',
+      source: a.source || '', author: a.uploaded_by,
+      date: a.created_at?.substring(0, 10) || '',
+      size: sizeMB >= 1 ? sizeMB.toFixed(1) + ' MB' : ((a.file_size || 0) / 1024).toFixed(0) + ' KB',
+      format: ext,
+      thumb: a.file_url || a.download_url || '',
+      tags: a.tags || [],
+      versions: a.versions || [],
+      downloadUrl: a.download_url,
+    }
   })
-  refreshAssets()
   ElMessage.success(`已添加 ${selectedAssetIds.value.length} 项素材`)
   showAddDialog.value = false
 }
 
-function removeFromCollection(assetId: number) {
+async function removeFromCollection(assetId: number) {
   if (!collection.value) return
-  store.removeFromCollection(collection.value.id, assetId)
-  refreshAssets()
+  await store.removeFromCollection(collection.value.id, assetId)
+  collection.value.assets = collection.value.assets?.filter(a => a.id !== assetId)
+  collection.value.asset_count = Math.max(0, collection.value.asset_count - 1)
   ElMessage.success('已从分组移除')
 }
 </script>
@@ -102,7 +148,7 @@ function removeFromCollection(assetId: number) {
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
       <div>
         <h2 style="font-size:20px;margin-bottom:4px">{{ collection.name }}</h2>
-        <p style="color:#909399;font-size:13px">{{ collection.desc }}</p>
+        <p style="color:#909399;font-size:13px">{{ collection.description }}</p>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <span style="font-size:12px;color:#909399">排序：</span>

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi import APIRouter, Request, status
 from pydantic import BaseModel, Field
 
@@ -80,6 +82,8 @@ async def get_collection(collection_id: int) -> CollectionDetailResponse:
     assets = collection_repository.list_collection_assets(collection_id)
     for asset in assets:
         asset["tags"] = asset_repository.list_asset_tag_names(asset["id"])
+        asset["file_url"] = f"/files/{Path(asset['file_path']).name}"
+        asset["download_url"] = f"/api/v1/assets/{asset['id']}/download"
     return CollectionDetailResponse(
         id=row["id"],
         name=row["name"],

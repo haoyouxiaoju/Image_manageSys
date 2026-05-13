@@ -44,10 +44,11 @@ export interface SearchResult extends Asset {
 export interface Collection {
   id: number
   name: string
-  desc: string
-  assetIds: number[]
-  created: string
+  description: string
+  asset_count: number
+  assets?: Asset[]
   creator: string
+  created_at: string
 }
 
 export interface AuditLog {

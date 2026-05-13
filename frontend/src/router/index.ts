@@ -51,18 +51,6 @@ const router = createRouter({
       meta: { title: 'AI 视觉能力说明' },
     },
     {
-      path: '/share-manage',
-      name: 'ShareManage',
-      component: () => import('@/views/ShareManageView.vue'),
-      meta: { title: '分享管理', requiresAuth: true, minRole: 'editor' },
-    },
-    {
-      path: '/audit',
-      name: 'Audit',
-      component: () => import('@/views/AuditView.vue'),
-      meta: { title: '审计日志', requiresAuth: true, minRole: 'admin' },
-    },
-    {
       path: '/asset/:id',
       name: 'AssetDetail',
       component: () => import('@/views/AssetDetailView.vue'),

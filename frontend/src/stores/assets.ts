@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { assetsApi, type BackendAsset } from '@/api/assets'
 import { agentApi } from '@/api/agent'
+import { collectionsApi, type BackendCollection } from '@/api/collections'
 import type { Asset, AssetVersion, Collection, SearchResult } from '@/types'
 
 // ===== 后端数据 → 前端 Asset 映射 =====
@@ -49,7 +50,7 @@ export const useAssetStore = defineStore('assets', () => {
   // ---- 筛选 & 分页 ----
   const selectedTags = ref<string[]>([])
   const globalSearch = ref('')
-  const pageSize = 10
+  const pageSize = 24
   const currentPage = ref(1)
 
   // ---- 搜索 ----
@@ -140,7 +141,10 @@ export const useAssetStore = defineStore('assets', () => {
     await assetsApi.deleteAsset(id)
     allAssets.value = allAssets.value.filter(a => a.id !== id)
     // 清理分组关联
-    collections.value.forEach(c => { c.assetIds = c.assetIds.filter(aid => aid !== id) })
+    collections.value.forEach(c => {
+      c.asset_count = Math.max(0, c.asset_count - 1)
+      if (c.assets) c.assets = c.assets.filter(a => a.id !== id)
+    })
   }
 
   /** 上传素材（在上传视图中调用） */
@@ -181,32 +185,69 @@ export const useAssetStore = defineStore('assets', () => {
     currentPage.value = 1
   }
 
+  // ---- 分组管理（对接后端 API） ----
+
+  const collectionsLoading = ref(false)
+
+  function _mapCollection(b: BackendCollection): Collection {
+    return {
+      id: b.id,
+      name: b.name,
+      description: b.description || '',
+      asset_count: b.asset_count,
+      creator: b.creator,
+      created_at: b.created_at,
+    }
+  }
+
+  /** 从后端加载分组列表 */
+  async function fetchCollections() {
+    collectionsLoading.value = true
+    try {
+      const res = await collectionsApi.list()
+      collections.value = res.data.map(_mapCollection)
+    } catch {
+      // 静默失败，保留旧数据
+    } finally {
+      collectionsLoading.value = false
+    }
+  }
+
   function getCollectionById(id: number): Collection | undefined {
     return collections.value.find(c => c.id === id)
   }
 
   function getCollectionAssets(col: Collection): Asset[] {
-    return col.assetIds.map(id => getAssetById(id)).filter(Boolean) as Asset[]
+    return col.assets || []
   }
 
-  function createCollection(name: string, desc: string, creator: string) {
-    collections.value.push({
-      id: Date.now(), name, desc, assetIds: [],
-      created: new Date().toISOString().split('T')[0], creator,
-    })
+  /** 创建分组 */
+  async function createCollection(name: string, description: string) {
+    const res = await collectionsApi.create({ name, description })
+    collections.value.push(_mapCollection(res.data))
+    return res.data.id
   }
 
-  function addToCollection(collectionId: number, assetId: number) {
+  /** 添加素材到分组 */
+  async function addToCollection(collectionId: number, assetId: number) {
+    await collectionsApi.addAsset(collectionId, assetId)
     const c = collections.value.find(x => x.id === collectionId)
-    if (c && !c.assetIds.includes(assetId)) c.assetIds.push(assetId)
+    if (c) c.asset_count += 1
   }
 
-  function removeFromCollection(collectionId: number, assetId: number) {
+  /** 从分组移除素材 */
+  async function removeFromCollection(collectionId: number, assetId: number) {
+    await collectionsApi.removeAsset(collectionId, assetId)
     const c = collections.value.find(x => x.id === collectionId)
-    if (c) c.assetIds = c.assetIds.filter(id => id !== assetId)
+    if (c) {
+      c.asset_count = Math.max(0, c.asset_count - 1)
+      if (c.assets) c.assets = c.assets.filter(a => a.id !== assetId)
+    }
   }
 
-  function deleteCollection(id: number) {
+  /** 删除分组 */
+  async function deleteCollection(id: number) {
+    await collectionsApi.delete(id)
     collections.value = collections.value.filter(c => c.id !== id)
   }
 
@@ -234,13 +275,13 @@ export const useAssetStore = defineStore('assets', () => {
   }
 
   return {
-    allAssets, totalCount, loading, error, allTags, collections,
+    allAssets, totalCount, loading, error, allTags, collections, collectionsLoading,
     selectedTags, globalSearch, pageSize, currentPage,
     searchResults, searchQuery, searching, searchReasoning,
     filteredAssets, pagedAssets, monthNewCount, visionReadyCount,
     fetchAssets, fetchAssetById, getAssetById, updateAsset, deleteAsset, uploadAsset,
     addAssetTag, removeAssetTag, addVersion, toggleTag, clearFilters,
-    getCollectionById, getCollectionAssets, createCollection, addToCollection, removeFromCollection, deleteCollection,
+    fetchCollections, getCollectionById, getCollectionAssets, createCollection, addToCollection, removeFromCollection, deleteCollection,
     doSearch,
   }
 })
