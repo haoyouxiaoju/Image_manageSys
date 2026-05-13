@@ -67,7 +67,7 @@ class Settings:
     agent_enabled: bool = _parse_bool(os.getenv("AGENT_ENABLED", "true"), default=True)
     agent_chat_model: str = os.getenv("AGENT_CHAT_MODEL", "qwen-plus")
     agent_max_tool_calls: int = int(os.getenv("AGENT_MAX_TOOL_CALLS", "5"))
-    agent_min_score: float = float(os.getenv("AGENT_MIN_SCORE", "0.45"))
+    agent_min_score: float = float(os.getenv("AGENT_MIN_SCORE", "0.5"))
 
 
 settings = Settings()

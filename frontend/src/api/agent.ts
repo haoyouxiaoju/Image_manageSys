@@ -11,6 +11,7 @@ export interface AgentSearchResultItem {
   asset: BackendAsset
   score: number
   match_reasons: string[]
+  llm_relevance: number | null
 }
 
 export interface AgentSearchResponse {

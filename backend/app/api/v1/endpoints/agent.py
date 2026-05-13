@@ -115,8 +115,8 @@ async def agent_search(payload: AgentSearchRequest) -> AgentSearchResponse:
                 match_reasons=[info.get("match_reason", "")] if info.get("match_reason") else [],
                 llm_relevance=info.get("llm_relevance"),
             ))
-        # 按向量相似度降序排列
-        items.sort(key=lambda it: it.score, reverse=True)
+        # 排序：有 LLM 评分的优先（按 llm_relevance 降序），无评分的按 cosine score 降序垫底
+        items.sort(key=lambda it: (0 if it.match_reasons and it.llm_relevance else 1, -(it.llm_relevance or it.score)))
         logger.info("[agent-endpoint] build_asset_details count=%d elapsed=%.0fms",
                      len(items), (perf_counter() - t_detail) * 1000)
 

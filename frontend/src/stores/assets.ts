@@ -220,7 +220,7 @@ export const useAssetStore = defineStore('assets', () => {
       const res = await agentApi.search({ query, page: 1, page_size: 50 })
       searchResults.value = res.data.items.map(item => ({
         ...mapAsset(item.asset),
-        score: Math.round(item.score * 100),
+        score: Math.round((item.llm_relevance ?? item.score) * 100),
         matchReasons: item.match_reasons || [],
       }))
       searchReasoning.value = res.data.reasoning || ''
