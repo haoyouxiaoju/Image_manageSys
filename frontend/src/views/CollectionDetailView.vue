@@ -176,11 +176,11 @@ async function removeFromCollection(assetId: number) {
 
     <div class="asset-grid">
       <div v-for="a in sortedAndFiltered" :key="a.id" class="asset-card" style="position:relative" @click="goDetail(a.id)">
-        <img :src="a.thumb" :alt="a.name" class="thumb" loading="lazy">
-        <div class="card-info">
-          <div class="card-name">{{ a.name }}</div>
-          <div class="card-meta"><span>{{ a.author }}</span><span>{{ a.date }}</span></div>
-          <div class="card-tags">
+        <img :src="a.thumb" :alt="a.name" class="asset-thumb" loading="lazy">
+        <div class="asset-body">
+          <div class="asset-name">{{ a.name }}</div>
+          <div class="asset-meta"><span>{{ a.author }}</span><span>·</span><span>{{ a.date }}</span></div>
+          <div class="asset-tags">
             <el-tag v-for="t in a.tags" :key="t" size="small">{{ t }}</el-tag>
           </div>
         </div>
