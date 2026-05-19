@@ -255,7 +255,12 @@ const showExplain = ref(false)
 }
 
 .explain-content {
-  @include glass-card;
+  background: var(--bg-surface);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
   padding: var(--space-5) var(--space-6);
   margin-top: var(--space-3);
   display: flex;
@@ -287,7 +292,12 @@ const showExplain = ref(false)
 }
 
 .reasoning-box {
-  @include glass-card;
+  background: var(--bg-surface);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
   padding: var(--space-5) var(--space-6);
   margin-bottom: var(--space-5);
   display: flex;
@@ -371,5 +381,24 @@ const showExplain = ref(false)
 .search-results-list {
   display: flex;
   flex-direction: column;
+}
+
+@media (max-width: 768px) {
+  .explain-toggle {
+    max-width: none;
+    margin-bottom: var(--space-4);
+  }
+
+  .explain-content {
+    padding: var(--space-4);
+  }
+
+  .explain-step {
+    gap: var(--space-3);
+  }
+
+  .reasoning-box {
+    padding: var(--space-4);
+  }
 }
 </style>

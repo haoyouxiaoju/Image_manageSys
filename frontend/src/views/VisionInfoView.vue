@@ -149,7 +149,12 @@
   gap: var(--space-5);
   margin-bottom: var(--space-8);
   padding: var(--space-6) var(--space-6);
-  @include glass-card;
+  background: var(--bg-surface);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
 
   h1 {
     font-size: 1.5rem;
@@ -186,5 +191,33 @@
   margin-bottom: var(--space-3);
   margin-top: var(--space-5);
   padding-left: 4px;
+}
+
+@media (max-width: 768px) {
+  .vision-header {
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    margin-bottom: var(--space-5);
+
+    h1 {
+      font-size: 1.25rem;
+    }
+
+    p {
+      font-size: 13px;
+      line-height: 1.6;
+    }
+  }
+
+  .vision-icon {
+    width: 44px;
+    height: 44px;
+
+    svg {
+      width: 26px;
+      height: 26px;
+    }
+  }
 }
 </style>

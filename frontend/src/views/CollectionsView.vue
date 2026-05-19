@@ -28,12 +28,13 @@ function viewCollection(c: { id: number }) {
 </script>
 
 <template>
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+  <div class="collections-page">
+  <div class="page-toolbar" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
     <h2 style="font-size:20px">分组管理</h2>
     <el-button type="primary" :icon="Plus" @click="showDialog = true" :disabled="auth.isGuest">新建分组</el-button>
   </div>
 
-  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+  <div class="collections-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
     <div v-for="c in store.collections" :key="c.id" class="collection-card" @click="viewCollection(c)">
       <div class="col-header">
         <span class="col-name">{{ c.name }}</span>
@@ -62,4 +63,29 @@ function viewCollection(c: { id: number }) {
       <el-button type="primary" @click="createCollection">创建</el-button>
     </template>
   </el-dialog>
+  </div>
 </template>
+
+<style scoped>
+.collections-page {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+@media (max-width: 768px) {
+  .page-toolbar {
+    align-items: flex-start !important;
+    flex-direction: column;
+    gap: 12px;
+
+    :deep(.el-button) {
+      width: 100%;
+    }
+  }
+
+  .collections-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+}
+</style>

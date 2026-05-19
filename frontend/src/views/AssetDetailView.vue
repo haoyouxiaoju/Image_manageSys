@@ -213,7 +213,7 @@ function submitVersion() {
       </div>
     </div>
 
-    <div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 10px">
+    <div class="detail-section-header" style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 10px">
       <h3 style="font-size:14px;color:#606266;margin:0">版本历史</h3>
       <el-button v-if="!auth.isGuest" size="small" :icon="Upload" @click="openVersionDialog">上传新版本</el-button>
     </div>
@@ -222,7 +222,7 @@ function submitVersion() {
       <div style="font-size:12px;color:#c0c4cc">{{ v.date }}</div>
     </div>
 
-    <div style="margin-top:24px;display:flex;gap:12px">
+    <div class="detail-actions" style="margin-top:24px;display:flex;gap:12px">
       <el-button type="primary" :icon="Download" @click="downloadAsset">下载原图</el-button>
       <el-button :icon="Share" @click="copyShareLink">复制分享链接</el-button>
       <el-button v-if="canDelete" type="danger" :icon="Delete" plain @click="deleteAsset">删除</el-button>
@@ -253,3 +253,75 @@ function submitVersion() {
 
   <el-empty v-if="!detailLoading && !asset" description="素材未找到" />
 </template>
+
+<style scoped>
+.asset-detail {
+  max-width: 920px;
+  margin: 0 auto;
+}
+
+.drawer-image {
+  width: 100%;
+  max-height: 520px;
+  object-fit: contain;
+  border-radius: var(--radius-lg);
+  background: var(--bg-base);
+  margin-bottom: var(--space-5);
+}
+
+.meta-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: var(--space-4);
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.meta-label {
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
+.meta-value {
+  color: var(--text-primary);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.vision-panel {
+  background: rgba(0, 122, 255, 0.04);
+  border: 1px solid rgba(0, 122, 255, 0.1);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+
+.version-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.v-tag {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .detail-section-header {
+    align-items: flex-start !important;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .detail-actions {
+    flex-direction: column;
+
+    :deep(.el-button) {
+      width: 100%;
+      margin-left: 0 !important;
+    }
+  }
+}
+</style>

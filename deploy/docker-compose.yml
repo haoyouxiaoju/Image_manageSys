@@ -1,0 +1,33 @@
+services:
+  # ── Frontend: Vue SPA + Nginx ───────────────────────────
+  frontend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+  # ── Backend: FastAPI ────────────────────────────────────
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.backend
+    restart: always
+    environment:
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
+      - DATA_DIR=/app/data
+      - UPLOADS_DIR=/app/data/uploads
+      - VECTOR_DB_PATH=/app/data/vector_db
+      - DATABASE_PATH=/app/data/sqlite/app.db
+    volumes:
+      - sqlite_data:/app/data/sqlite
+      - uploads_data:/app/data/uploads
+      - vector_data:/app/data/vector_db
+
+volumes:
+  sqlite_data:
+  uploads_data:
+  vector_data:

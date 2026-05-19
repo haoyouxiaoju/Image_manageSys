@@ -11,6 +11,11 @@ const store = useAssetStore()
 // ---- 步骤控制 ----
 type Step = 'select' | 'analyze' | 'upload'
 const currentStep = ref<Step>('select')
+const uploadSteps: Array<{ key: Step; label: string; desc: string }> = [
+  { key: 'select', label: '选择图片', desc: '点击或拖拽选择文件' },
+  { key: 'analyze', label: 'AI 图片分析', desc: '自动识别内容并填写信息' },
+  { key: 'upload', label: '确认上传', desc: '检查信息后提交入库' },
+]
 
 // ---- 模式：single（选图片）或 zip（选 ZIP 包） ----
 type UploadMode = 'single' | 'zip'
@@ -540,15 +545,13 @@ const stepStatus = computed(() => ({
 </script>
 
 <template>
+  <div class="upload-page">
   <el-alert v-if="auth.isGuest" title="访客无法上传，请先登录编辑或管理员账号" type="warning" show-icon :closable="false" style="margin-bottom:20px" />
 
   <!-- ===== 步骤指示器 ===== -->
-  <div style="display:flex;gap:16px;margin-bottom:20px">
-    <div v-for="(step, i) in [
-      { key:'select', label:'选择图片', desc:'点击或拖拽选择文件' },
-      { key:'analyze', label:'AI 图片分析', desc:'自动识别内容并填写信息' },
-      { key:'upload', label:'确认上传', desc:'检查信息后提交入库' },
-    ]" :key="step.key"
+  <div class="upload-steps" style="display:flex;gap:16px;margin-bottom:20px">
+    <div v-for="(step, i) in uploadSteps" :key="step.key"
+      class="upload-step-card"
       style="flex:1;background:#fff;border-radius:8px;padding:16px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.06);display:flex;align-items:center;gap:12px"
       :style="{ opacity: currentStep === step.key ? 1 : stepStatus[step.key] === 'done' ? 0.85 : 0.5 }"
     >
@@ -586,14 +589,14 @@ const stepStatus = computed(() => ({
 
   <!-- ===== 单张模式：缩略图列表（点击切换活跃图片） ===== -->
   <div v-if="hasFiles && uploadMode === 'single'" style="margin-bottom:20px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <div class="upload-section-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <span style="font-size:14px;color:#606266">
         已选择 <b>{{ singleEntries.length }}</b> 个文件
         <span v-if="hasAnyAnalyzed" style="color:#67C23A;margin-left:8px">
           · {{ singleEntries.filter(e => e.analyzed).length }} 张已分析
         </span>
       </span>
-      <div style="display:flex;gap:8px">
+      <div class="upload-action-row" style="display:flex;gap:8px">
         <el-button
           v-if="currentStep === 'select'"
           type="primary" :icon="Cpu"
@@ -606,9 +609,10 @@ const stepStatus = computed(() => ({
         >逐张分析全部</el-button>
       </div>
     </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <div class="upload-thumb-list" style="display:flex;gap:8px;flex-wrap:wrap">
       <div v-for="(entry, i) in singleEntries" :key="i"
         @click="selectImage(i)"
+        class="upload-thumb-item"
         style="position:relative;width:120px;text-align:center;cursor:pointer;border-radius:8px;padding:6px;transition:all 0.15s"
         :style="{
           background: i === activeIndex ? '#f0ebff' : '#fff',
@@ -647,9 +651,9 @@ const stepStatus = computed(() => ({
 
   <!-- ===== ZIP 模式：图片列表 + 分析 ===== -->
   <div v-if="hasZipEntries && !zipAnalyzing" style="margin-bottom:20px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <div class="upload-section-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <span style="font-size:14px;color:#606266">ZIP 包中有 <b>{{ zipResults.length }}</b> 张图片</span>
-      <div style="display:flex;gap:8px">
+      <div class="upload-action-row" style="display:flex;gap:8px">
         <el-button
           v-if="currentStep === 'select'"
           type="primary" :icon="Cpu"
@@ -673,7 +677,7 @@ const stepStatus = computed(() => ({
     </div>
 
     <!-- ZIP 图片结果表格 -->
-    <div style="overflow-x:auto;background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06)">
+    <div class="upload-table-wrap" style="overflow-x:auto;background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06)">
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead>
           <tr style="background:#f5f7fa;text-align:left">
@@ -786,7 +790,7 @@ const stepStatus = computed(() => ({
     </div>
 
     <!-- 可编辑表单 -->
-    <div style="background:#fff;border-radius:8px;padding:24px;box-shadow:0 1px 4px rgba(0,0,0,0.06)">
+    <div class="upload-confirm-card" style="background:#fff;border-radius:8px;padding:24px;box-shadow:0 1px 4px rgba(0,0,0,0.06)">
       <h3 style="margin-bottom:16px;font-size:15px;display:flex;align-items:center;gap:8px">
         确认素材信息
         <span style="font-size:12px;color:#909399;font-weight:400">AI 已自动填写可复现提示词，可手动修改</span>
@@ -804,7 +808,7 @@ const stepStatus = computed(() => ({
           <el-input v-model="formSource" placeholder="设计部、外包团队..." />
         </el-form-item>
         <el-form-item>
-          <div style="display:flex;gap:8px">
+          <div class="upload-action-row" style="display:flex;gap:8px">
             <el-button type="primary" size="large" :loading="uploading" @click="confirmAndUpload">
               <el-icon><UploadFilled /></el-icon> 确认上传（{{ singleEntries.length }} 个文件）
             </el-button>
@@ -817,7 +821,7 @@ const stepStatus = computed(() => ({
   </div>
 
   <!-- ===== ZIP 模式：批量上传按钮 ===== -->
-  <div v-if="hasZipEntries && currentStep === 'upload' && uploadMode === 'zip'" style="background:#fff;border-radius:8px;padding:24px;box-shadow:0 1px 4px rgba(0,0,0,0.06);margin-top:16px">
+  <div v-if="hasZipEntries && currentStep === 'upload' && uploadMode === 'zip'" class="upload-confirm-card" style="background:#fff;border-radius:8px;padding:24px;box-shadow:0 1px 4px rgba(0,0,0,0.06);margin-top:16px">
     <h3 style="margin-bottom:16px;font-size:15px">
       确认批量上传
       <span style="font-size:12px;color:#909399;font-weight:400">每张图片用各自的可复现提示词</span>
@@ -827,7 +831,7 @@ const stepStatus = computed(() => ({
         <el-input v-model="formSource" placeholder="设计部、外包团队..." />
       </el-form-item>
       <el-form-item>
-        <div style="display:flex;gap:8px">
+        <div class="upload-action-row" style="display:flex;gap:8px">
           <el-button type="primary" size="large" :loading="uploading" @click="confirmAndUpload">
             <el-icon><UploadFilled /></el-icon> 确认批量上传（{{ zipResults.filter(r => r.status === 'done').length }} / {{ zipResults.length }} 张）
           </el-button>
@@ -837,4 +841,86 @@ const stepStatus = computed(() => ({
       </el-form-item>
     </el-form>
   </div>
+  </div>
 </template>
+
+<style scoped>
+.upload-page {
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+@media (max-width: 768px) {
+  .upload-steps {
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+
+  .upload-step-card {
+    padding: 12px 14px !important;
+    align-items: flex-start !important;
+  }
+
+  .upload-section-header {
+    align-items: flex-start !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+
+  .upload-action-row {
+    width: 100%;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+
+    :deep(.el-button) {
+      flex: 1 1 140px;
+      margin-left: 0 !important;
+    }
+  }
+
+  .upload-thumb-list {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px !important;
+  }
+
+  .upload-thumb-item {
+    width: auto !important;
+
+    img {
+      width: 100% !important;
+      height: 96px !important;
+    }
+  }
+
+  .upload-table-wrap {
+    border-radius: var(--radius-md) !important;
+  }
+
+  .upload-confirm-card {
+    padding: var(--space-4) !important;
+
+    h3 {
+      flex-direction: column;
+      align-items: flex-start !important;
+      gap: 4px !important;
+      line-height: 1.4;
+    }
+
+    :deep(.el-form) {
+      .el-form-item {
+        display: block;
+      }
+
+      .el-form-item__label {
+        justify-content: flex-start;
+        margin-bottom: 6px;
+      }
+
+      .el-form-item__content {
+        margin-left: 0 !important;
+      }
+    }
+  }
+}
+</style>

@@ -142,15 +142,15 @@ async function removeFromCollection(assetId: number) {
 </script>
 
 <template>
-  <div v-if="collection">
+  <div v-if="collection" class="collection-detail-page">
     <el-button :icon="ArrowLeft" @click="router.push('/collections')" style="margin-bottom:16px">返回分组列表</el-button>
 
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+    <div class="collection-header" style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
       <div>
         <h2 style="font-size:20px;margin-bottom:4px">{{ collection.name }}</h2>
         <p style="color:#909399;font-size:13px">{{ collection.description }}</p>
       </div>
-      <div style="display:flex;gap:8px;align-items:center">
+      <div class="collection-actions" style="display:flex;gap:8px;align-items:center">
         <span style="font-size:12px;color:#909399">排序：</span>
         <el-select v-model="sortBy" size="small" style="width:120px">
           <el-option label="最新优先" value="date_desc" />
@@ -221,3 +221,31 @@ async function removeFromCollection(assetId: number) {
   </div>
   <el-empty v-else description="分组未找到" />
 </template>
+
+<style scoped>
+.collection-detail-page {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+@media (max-width: 768px) {
+  .collection-header {
+    flex-direction: column !important;
+    gap: 12px;
+  }
+
+  .collection-actions {
+    width: 100%;
+    flex-wrap: wrap;
+
+    :deep(.el-select) {
+      flex: 1 1 130px;
+    }
+
+    :deep(.el-button) {
+      flex: 1 1 130px;
+      margin-left: 0 !important;
+    }
+  }
+}
+</style>

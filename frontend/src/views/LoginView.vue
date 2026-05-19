@@ -64,8 +64,8 @@ async function handleRegister() {
 </script>
 
 <template>
-  <div style="display:flex;justify-content:center;align-items:center;height:100%">
-    <div style="width:400px;background:#fff;border-radius:8px;padding:40px;box-shadow:0 2px 12px rgba(0,0,0,0.08)">
+  <div class="login-page" style="display:flex;justify-content:center;align-items:center;height:100%">
+    <div class="login-card" style="width:400px;background:#fff;border-radius:8px;padding:40px;box-shadow:0 2px 12px rgba(0,0,0,0.08)">
       <h2 style="text-align:center;margin-bottom:4px;font-size:20px">
         {{ mode === 'login' ? '登录' : '注册' }}
       </h2>
@@ -114,3 +114,20 @@ async function handleRegister() {
     </div>
   </div>
 </template>
+
+<style scoped>
+@media (max-width: 768px) {
+  .login-page {
+    min-height: calc(100vh - 140px);
+    height: auto !important;
+    align-items: flex-start !important;
+    padding-top: var(--space-4);
+  }
+
+  .login-card {
+    width: 100% !important;
+    padding: var(--space-5) !important;
+    border-radius: var(--radius-md) !important;
+  }
+}
+</style>

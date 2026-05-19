@@ -50,7 +50,7 @@ export const assetsApi = {
   uploadAsset(formData: FormData, onProgress?: (e: ProgressEvent) => void) {
     return client.post<BackendAsset>('/assets/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 60000,
+      timeout: 120000,
       onUploadProgress: onProgress,
     })
   },
