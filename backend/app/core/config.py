@@ -49,6 +49,7 @@ class Settings:
     auth_header_name: str = os.getenv("AUTH_HEADER_NAME", "Authorization")
     database_path: str = os.getenv("DATABASE_PATH", _default_database_path())
     uploads_dir: str = os.getenv("UPLOADS_DIR", _default_uploads_dir())
+    asset_base_url: str = os.getenv("ASSET_BASE_URL", "").rstrip("/")
     jwt_secret_key: str = os.getenv("JWT_SECRET_KEY", "dev-change-this-secret")
     jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")
     access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "120"))

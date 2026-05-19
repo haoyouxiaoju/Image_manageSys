@@ -1,7 +1,10 @@
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
+
+from app.core.config import settings
 
 from app.repositories import asset_repository, vision_repository
 from app.services.vector_search_service import vector_search_service
@@ -42,7 +45,8 @@ def _build_asset_payload(row: dict) -> dict[str, Any]:
         "versions": asset_repository.list_asset_versions(asset_id),
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
-        "download_url": f"/api/v1/assets/{asset_id}/download",
+        "file_url": f"{settings.asset_base_url}/files/{Path(row['file_path']).name}" if row.get("file_path") else "",
+        "download_url": f"{settings.asset_base_url}/api/v1/assets/{asset_id}/download",
         "vision_analysis": {
             "provider": row["provider"],
             "status": row["status"],

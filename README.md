@@ -56,6 +56,7 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements-dev.txt
 $env:PYTHONPATH = "."
+$env:ASSET_BASE_URL = "http://localhost"
 
 # 启动
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
@@ -79,7 +80,7 @@ Vite 开发服务器默认运行在 `http://localhost:5173`。
 
 ```powershell
 # 管理员终端
-nginx -c D:/myfiles/code/c/CLIP-Image_manageSys/nginx.conf
+nginx -c ./nginx.conf
 ```
 
 启动后访问 `http://localhost`（端口 80），全部流量经 Nginx 分发：
@@ -105,18 +106,67 @@ python -m pytest tests -q
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
+| `ASSET_BASE_URL` | `` | 图片资源基础 URL。本地用 `http://localhost`，服务器部署设为域名，留空则使用相对路径 |
 | `DASHSCOPE_API_KEY` | — | Bailian API Key（必填） |
 | `VECTOR_ENABLED` | `true` | 是否启用向量检索 |
 | `AGENT_ENABLED` | `true` | 是否启用 Agent 搜索 |
 | `AGENT_MIN_SCORE` | `0.5` | 搜索结果最低相似度阈值 |
 | `AGENT_CHAT_MODEL` | `qwen-plus` | Agent 使用的 LLM 模型 |
-| `CLIP_REQUIRED_ON_UPLOAD` | `false` | 上传时是否强制 AI 分析成功 |
+| `VISION_REQUIRED_ON_UPLOAD` | `false` | 上传时是否强制 AI 分析成功 |
 | `UPLOADS_DIR` | `../data/uploads` | 上传文件存储目录 |
 | `VECTOR_DB_PATH` | `../data/vector_db` | Qdrant 数据目录 |
 
 ## API
 
 运行时访问 Swagger：`http://127.0.0.1:8000/docs`，接口详见 `docs/api.md`。
+
+## 服务器部署
+
+### 1. 打包前端
+
+```bash
+cd frontend
+npm run build    # 输出到 dist/
+```
+
+### 2. 修改 Nginx 配置
+
+将 `nginx.conf` 中的前端路由从代理 Vite 改为静态文件：
+
+```nginx
+# 开发（代理 Vite）
+# location / { proxy_pass http://127.0.0.1:5173; ... }
+
+# 生产（静态文件）
+location / {
+    root D:/myfiles/code/c/CLIP-Image_manageSys/frontend/dist;
+    try_files $uri $uri/ /index.html;
+}
+```
+
+### 3. 设置图片 URL
+
+```bash
+export ASSET_BASE_URL="http://你的服务器IP或域名"
+```
+
+确保后端设置了这个环境变量，图片的 `file_url` 会使用绝对路径指向 Nginx。
+
+### 4. 启动服务
+
+```bash
+# 后端
+cd backend && uvicorn app.main:app --host 127.0.0.1 --port 8000
+
+# Nginx
+nginx -c /path/to/nginx.conf
+```
+
+### 5. 开放端口
+
+- 防火墙开放 80 端口
+- 如用云服务器，安全组放行 80 端口
+- 浏览器访问 `http://服务器IP` 即可
 
 ## 文档
 

@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 from app.core.auth_context import get_current_user, require_editor_or_admin
 from app.core.exceptions import ApiError
+from app.core.config import settings
 from app.repositories import asset_repository, collection_repository
 
 router = APIRouter()
@@ -82,8 +83,8 @@ async def get_collection(collection_id: int) -> CollectionDetailResponse:
     assets = collection_repository.list_collection_assets(collection_id)
     for asset in assets:
         asset["tags"] = asset_repository.list_asset_tag_names(asset["id"])
-        asset["file_url"] = f"/files/{Path(asset['file_path']).name}"
-        asset["download_url"] = f"/api/v1/assets/{asset['id']}/download"
+        asset["file_url"] = f"{settings.asset_base_url}/files/{Path(asset['file_path']).name}"
+        asset["download_url"] = f"{settings.asset_base_url}/api/v1/assets/{asset['id']}/download"
     return CollectionDetailResponse(
         id=row["id"],
         name=row["name"],

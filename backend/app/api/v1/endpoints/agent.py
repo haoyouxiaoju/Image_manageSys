@@ -6,6 +6,7 @@ from time import perf_counter
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
+from app.core.config import settings
 from app.repositories import asset_repository, vision_repository
 from app.services.agent_service import agent_service
 
@@ -92,8 +93,8 @@ async def agent_search(payload: AgentSearchRequest) -> AgentSearchResponse:
                 "versions": versions,
                 "created_at": row["created_at"],
                 "updated_at": row["updated_at"],
-                "file_url": f"/files/{Path(row['file_path']).name}" if row.get("file_path") else "",
-                "download_url": f"/api/v1/assets/{aid}/download",
+                "file_url": f"{settings.asset_base_url}/files/{Path(row['file_path']).name}" if row.get("file_path") else "",
+                "download_url": f"{settings.asset_base_url}/api/v1/assets/{aid}/download",
                 "vision_analysis": {
                     "provider": row.get("provider"),
                     "status": row.get("status"),

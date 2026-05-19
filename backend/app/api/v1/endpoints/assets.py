@@ -134,8 +134,8 @@ def _to_asset_response(asset: dict, include_vision_embedding: bool = False) -> A
         versions=versions,
         created_at=asset["created_at"],
         updated_at=asset["updated_at"],
-        file_url=f"/files/{Path(asset['file_path']).name}",
-        download_url=f"/api/v1/assets/{asset['id']}/download",
+        file_url=f"{settings.asset_base_url}/files/{Path(asset['file_path']).name}",
+        download_url=f"{settings.asset_base_url}/api/v1/assets/{asset['id']}/download",
         vision_analysis=_to_vision_analysis_response(vision_analysis, include_embedding=include_vision_embedding),
     )
 
